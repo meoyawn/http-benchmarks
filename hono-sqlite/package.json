@@ -1,15 +1,15 @@
 {
   "type": "module",
   "dependencies": {
-    "hono": "^4.6.8"
+    "hono": "^4.6.12",
+    "valibot": "^1.0.0-beta.9"
   },
   "devDependencies": {
-    "@responsibleapi/cli": "^0.3.17",
-    "@types/bun": "^1.1.12",
-    "@types/node": "^22.8.6",
-    "prettier": "^3.3.3",
+    "@responsibleapi/cli": "^0.4.1",
+    "@types/bun": "^1.1.14",
+    "prettier": "^3.4.1",
     "prettier-plugin-organize-imports": "^4.1.0",
-    "prettier-plugin-packagejson": "^2.5.3",
-    "typescript": "^5.6.3"
+    "prettier-plugin-packagejson": "^2.5.6",
+    "typescript": "^5.7.2"
   }
 }

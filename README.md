@@ -6,9 +6,9 @@
 ## TODO
 
 - [ ] Vert.x
-  - [ ] JVM
+  - [x] JVM: 32K rps, p50 1.4ms
   - [ ] Graal
-- [ ] Bun Hono
+- [x] Bun Hono: 21K rps, p50 1.9ms
 - [ ] Kotlin Native Ktor
 - [ ] Golang
 - [ ] Zig

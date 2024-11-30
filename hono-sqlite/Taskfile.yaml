@@ -2,6 +2,8 @@ version: 3
 
 vars:
   BINARY: dist/server
+  LOCAL_PORT: 3000
+  UNIX_SOCKET: /tmp/bun.sock
 
 tasks:
   openapi:
@@ -19,8 +21,6 @@ tasks:
 
   jbuild:
     desc: Single .js
-    deps:
-      - openapi
     cmd: bun build --minify --sourcemap src/server.ts --outdir dist/ --external bun:sqlite
     sources:
       - src/**/*
@@ -37,8 +37,6 @@ tasks:
 
   build:
     desc: Single executable
-    deps:
-      - openapi
     cmds:
       - bun build --compile --minify --sourcemap src/server.ts --outfile {{.BINARY}}
       - defer: find . -maxdepth 1 -type f -name "*.bun-build" -delete
@@ -57,8 +55,4 @@ tasks:
 
   post:
     cmd: >
-      oha http://127.0.0.1:3000/notes -z 10s -m POST -T 'application/json' -d '{ "title": "oha benchmark" }'
-
-  get:
-    cmd: >
-      oha http://127.0.0.1:3000/notes?limit=50 -z 10s
+      oha http://localhost:3000/posts --no-tui --unix-socket {{.UNIX_SOCKET}} -z 10s -m POST -T 'application/json' -d '{ "content": "bun benchmark", "email": "bun@gmail.com" }'
