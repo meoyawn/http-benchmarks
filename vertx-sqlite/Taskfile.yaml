@@ -1,0 +1,44 @@
+version: 3
+
+vars:
+  JAR: build/libs/vertx-sqlite-1.0-all.jar
+  LOCAL_PORT: 8080
+  UNIX_SOCKET: /tmp/vertx.sock
+
+tasks:
+  openapi:
+    cmds:
+      - bunx @responsibleapi/cli ../openapi/http.kdl -o src/main/resources/openapi.json.tmp
+      - jq '.openapi = "3.0.0"' src/main/resources/openapi.json.tmp > src/main/resources/openapi.json
+      - rm src/main/resources/openapi.json.tmp
+    sources:
+      - ../http.kdl
+      - Taskfile.yaml
+    generates:
+      - src/main/resources/openapi.json
+
+  start:
+    deps:
+      - openapi
+    cmds:
+      - ./gradlew run
+
+  build:
+    deps:
+      - openapi
+    cmd: ./gradlew sJ
+    sources:
+      - src/**/*
+      - gradle/**/*
+      - "*gradle*"
+    generates:
+      - "{{.JAR}}"
+
+  bstart:
+    deps:
+      - build
+    cmd: java -server -Xms1G -XX:+PerfDisableSharedMem -Dhttp.socket={{.UNIX_SOCKET}} -jar {{.JAR}}
+
+  post:
+    cmd: >
+      oha http://localhost:{{.LOCAL_PORT}}/posts --no-tui --unix-socket {{.UNIX_SOCKET}} -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "foo@gmail.com" }'

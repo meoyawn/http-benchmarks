@@ -1,0 +1,45 @@
+/** https://responsibleapi.com */
+responsible syntax=1
+
+info {
+  title "Posts"
+  version "0.0.1"
+}
+
+type "UserID" "int64" minimum=1
+type "PostID" "int64" minimum=1
+
+struct "Post" {
+  id "PostID"
+  user_id "UserID"
+  content "string" minLength=1
+  created_at "int64"
+  updated_at "int64"
+}
+
+struct "NewPost" {
+  email "email"
+  content "string" minLength=1
+}
+
+* {
+  req {
+      mime "application/json"
+  }
+
+  res {
+      mime "application/json"
+      header "Content-Length" "int32" minimum=1
+  }
+}
+
+POST "/posts" {
+  name "newPost"
+
+  req "NewPost"
+
+  res {
+    "201" "Post"
+    "400" "unknown"
+  }
+}

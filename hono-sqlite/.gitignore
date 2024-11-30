@@ -1,0 +1,7 @@
+.task/
+.vscode/
+.idea/
+*.iml
+node_modules/
+dist/
+openapi.json

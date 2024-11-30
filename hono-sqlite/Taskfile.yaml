@@ -1,0 +1,64 @@
+version: 3
+
+vars:
+  BINARY: dist/server
+
+tasks:
+  openapi:
+    cmd: bun responsible ../http.kdl -o openapi.json
+    sources:
+      - ../http.kdl
+      - bun.lockb
+    generates:
+      - openapi.json
+
+  start:
+    deps:
+      - openapi
+    cmd: bun --watch src/server.ts
+
+  jbuild:
+    desc: Single .js
+    deps:
+      - openapi
+    cmd: bun build --minify --sourcemap src/server.ts --outdir dist/ --external bun:sqlite
+    sources:
+      - src/**/*
+      - bun.lockb
+      - tsconfig.json
+      - Taskfile.yaml
+    generates:
+      - dist/server.js
+
+  jstart:
+    deps:
+      - jbuild
+    cmd: bun dist/server.js
+
+  build:
+    desc: Single executable
+    deps:
+      - openapi
+    cmds:
+      - bun build --compile --minify --sourcemap src/server.ts --outfile {{.BINARY}}
+      - defer: find . -maxdepth 1 -type f -name "*.bun-build" -delete
+    sources:
+      - src/**/*
+      - bun.lockb
+      - tsconfig.json
+      - Taskfile.yaml
+    generates:
+      - "{{.BINARY}}"
+
+  bstart:
+    deps:
+      - build
+    cmd: ./{{.BINARY}}
+
+  post:
+    cmd: >
+      oha http://127.0.0.1:3000/notes -z 10s -m POST -T 'application/json' -d '{ "title": "oha benchmark" }'
+
+  get:
+    cmd: >
+      oha http://127.0.0.1:3000/notes?limit=50 -z 10s

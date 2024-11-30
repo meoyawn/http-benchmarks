@@ -1,0 +1,32 @@
+version: 3
+
+vars:
+  GO_MIGRATE: ../../../github/migrate/cmd/migrate/migrate
+  MIGRATIONS_DIR: db/migrations
+  DB_FILE: db/db.sqlite
+
+tasks:
+  migrate:
+    cmds:
+      - rm {{.DB_FILE}}
+      - "{{.GO_MIGRATE}} -path {{.MIGRATIONS_DIR}} -database sqlite3://{{.DB_FILE}} up"
+    sources:
+      - "{{.GO_MIGRATE}}"
+      - "{{.MIGRATIONS_DIR}}/**/*"
+    generates:
+      - "{{.DB_FILE}}"
+
+  openapi:
+    vars:
+      KDL_FILE: openapi/http.kdl
+      JSON_FILE: openapi/http.json
+    cmds:
+      - rm -f {{.JSON_FILE}}
+      - bunx @responsibleapi/cli {{.KDL_FILE}} -o {{.JSON_FILE}}
+      - jq '.openapi = "3.0.0"' {{.JSON_FILE}} > {{.JSON_FILE}}.tmp
+      - mv {{.JSON_FILE}}.tmp {{.JSON_FILE}}
+    sources:
+      - "{{.KDL_FILE}}"
+      - Taskfile.yaml
+    generates:
+      - "{{.JSON_FILE}}"
