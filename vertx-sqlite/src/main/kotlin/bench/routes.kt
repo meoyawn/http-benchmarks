@@ -76,21 +76,24 @@ private fun PreparedStatement.execute(body: NewPost): Post {
     }
 }
 
-fun RouterBuilder.openApiRoutes(
+suspend fun RouterBuilder.openApiRoutes(
     appScope: CoroutineScope,
-    dbConn: Connection,
+    writeConn: Connection,
     writeThread: CoroutineDispatcher,
     closeables: MutableList<in AutoCloseable>,
 ): RouterBuilder {
 
-    val insertUser = dbConn.prepareStatement("INSERT OR IGNORE INTO users (email) VALUES (?)").also(closeables::add)
-
-    val insertPost = dbConn.prepareStatement(INSERT_POST).also(closeables::add)
+    val (insertUser, insertPost) = withContext(writeThread) {
+        Pair(
+            writeConn.prepareStatement("INSERT OR IGNORE INTO users (email) VALUES (?)").also(closeables::add),
+            writeConn.prepareStatement(INSERT_POST).also(closeables::add),
+        )
+    }
 
     operation("newPost").coHandle(appScope) { ctx ->
         val body = ctx.body().asPojo(NewPost::class.java) ?: throw HttpException(400)
 
-        val post = dbConn.tx(writeThread) {
+        val post = writeConn.tx(writeThread) {
             insertUser.setString(1, body.email)
             check(!insertUser.execute())
 
