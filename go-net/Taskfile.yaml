@@ -1,0 +1,5 @@
+version: 3
+
+tasks:
+  bstart:
+    - go run main.go

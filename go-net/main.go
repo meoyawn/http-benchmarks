@@ -153,10 +153,7 @@ func main() {
 
 	go dbWriter(requests)
 
-	app := fiber.New(fiber.Config{
-		Prefork:   port > 0,
-		Immutable: true,
-	})
+	app := fiber.New(fiber.Config{})
 
 	app.Post("/posts", func(ctx *fiber.Ctx) error {
 		body := NewPost{}

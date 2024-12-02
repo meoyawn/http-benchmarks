@@ -3,6 +3,7 @@ package bench
 import io.vertx.config.ConfigRetriever
 import io.vertx.config.ConfigRetrieverOptions
 import io.vertx.core.DeploymentOptions
+import io.vertx.core.ThreadingModel
 import io.vertx.core.Vertx
 import io.vertx.core.VertxOptions
 import io.vertx.core.json.jackson.DatabindCodec
@@ -20,7 +21,12 @@ object Main {
         DatabindCodec.mapper().configKotlin()
 
         val config = retriever.config.coAwait()
-        val id = vertx.deployVerticle(App(), DeploymentOptions().setConfig(config)).coAwait()
+        val id = vertx.deployVerticle(
+            App(),
+            DeploymentOptions()
+                .setConfig(config)
+                .setThreadingModel(ThreadingModel.VIRTUAL_THREAD)
+        ).coAwait()
 
         Runtime.getRuntime().addShutdownHook(Thread {
             runBlocking {
