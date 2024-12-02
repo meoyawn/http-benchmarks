@@ -152,7 +152,9 @@ func validate(p NewPost) []string {
 
 func main() {
 	var socketFile string
+	var port int
 	flag.StringVar(&socketFile, "socket", "/tmp/benchmark.sock", "Unix domain socket")
+	flag.IntVar(&port, "port", 0, "HTTP port")
 	flag.Parse()
 
 	requests := make(chan NewPost)   // closed below before server.Close()
@@ -161,7 +163,7 @@ func main() {
 	go dbWriter(requests, results)
 
 	app := fiber.New(fiber.Config{
-		//Prefork:   true,
+		Prefork:   port > 0,
 		Immutable: true,
 	})
 
@@ -197,11 +199,6 @@ func main() {
 		}
 	})
 
-	unixListener, err := net.Listen("unix", socketFile)
-	if err != nil {
-		log.Panic(err)
-	}
-
 	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -217,8 +214,20 @@ func main() {
 		}
 	}()
 
-	err = app.Listener(unixListener)
-	if err != nil {
-		log.Panic(err)
+	if port > 0 {
+		err := app.Listen(fmt.Sprintf(":%d", port))
+		if err != nil {
+			log.Panic(err)
+		}
+	} else {
+		unixListener, err := net.Listen("unix", socketFile)
+		if err != nil {
+			log.Panic(err)
+		}
+
+		err = app.Listener(unixListener)
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 }

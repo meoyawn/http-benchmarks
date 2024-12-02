@@ -34,3 +34,7 @@ tasks:
   post:
     cmd: >
       oha http://localhost:3000/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
+
+  tcppost:
+    cmd: >
+      oha http://localhost:3000/posts --no-tui -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
