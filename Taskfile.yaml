@@ -8,7 +8,7 @@ vars:
 tasks:
   migrate:
     cmds:
-      - rm {{.DB_FILE}}
+      - rm -rf {{.DB_FILE}}*
       - "{{.GO_MIGRATE}} -path {{.MIGRATIONS_DIR}} -database sqlite3://{{.DB_FILE}} up"
     sources:
       - "{{.GO_MIGRATE}}"
