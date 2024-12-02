@@ -1,6 +1,5 @@
 package bench
 
-import io.vertx.core.http.HttpServerOptions
 import io.vertx.core.impl.logging.LoggerFactory
 import io.vertx.core.net.SocketAddress
 import io.vertx.ext.web.RoutingContext
@@ -54,12 +53,7 @@ class App(private val db: Db) : CoroutineVerticle() {
         val port = config.getInteger("http.port", 8080)
         val domainSocket = config.getString("http.socket", "")
 
-        vertx.createHttpServer(
-            HttpServerOptions()
-                .setTcpFastOpen(true)
-                .setTcpNoDelay(true)
-                .setTcpQuickAck(true)
-        )
+        vertx.createHttpServer()
             .requestHandler(router)
             .listen(
                 if (domainSocket.isNullOrBlank()) SocketAddress.inetSocketAddress(port, host)
