@@ -37,7 +37,7 @@ tasks:
   bstart:
     deps:
       - build
-    cmd: java -server -Xms1G -XX:+PerfDisableSharedMem -Dhttp.socket={{.UNIX_SOCKET}} -jar {{.JAR}}
+    cmd: java -server -XX:+PerfDisableSharedMem -Dhttp.socket={{.UNIX_SOCKET}} -jar {{.JAR}}
 
   post:
     cmd: >

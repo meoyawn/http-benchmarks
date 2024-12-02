@@ -1,7 +1,8 @@
-import type { Serve } from "bun"
 import { Database } from "bun:sqlite"
 import { Hono } from "hono"
+import { HTTPException } from "hono/http-exception"
 import { validator } from "hono/validator"
+import * as fs from "node:fs/promises"
 import * as v from "valibot"
 
 const db = new Database("../db/db.sqlite")
@@ -53,18 +54,28 @@ const hono = new Hono().post(
   ctx => {
     const body = ctx.req.valid("json")
 
-    let res: Post | null = null
-
+    let post: Post | null = null
     db.transaction(({ content, email }: NewPost) => {
       insertUser.run(email)
-      res = insertPost.get(content, email)
+      post = insertPost.get(content, email)
+      if (!post) throw new HTTPException(500)
     }).immediate(body)
 
-    return res ? ctx.json(res, 201) : ctx.text("Could not insert", 500)
+    return ctx.json(post, 201)
   },
 )
 
-function shutdown(): void {
+const unix = "/tmp/benchmark.sock"
+
+const server = Bun.serve({
+  unix,
+  fetch: hono.fetch,
+  development: false,
+})
+
+console.log(`Listening on ${unix}`)
+
+async function shutdown() {
   console.log("Closing DB")
 
   insertUser.finalize()
@@ -72,18 +83,14 @@ function shutdown(): void {
 
   db.exec("PRAGMA optimize")
   db.close(true)
+
+  await server.stop(true)
+  await fs.rm(unix)
 }
 
 for (const sig of ["SIGINT", "SIGTERM"]) {
-  process.once(sig, () => {
-    shutdown()
+  process.once(sig, async () => {
+    await shutdown()
     process.exit(0)
   })
 }
-
-// noinspection JSUnusedGlobalSymbols
-export default {
-  unix: "/tmp/benchmark.sock",
-  fetch: hono.fetch,
-  development: false,
-} satisfies Serve

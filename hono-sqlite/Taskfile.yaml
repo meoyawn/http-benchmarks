@@ -21,7 +21,7 @@ tasks:
 
   jbuild:
     desc: Single .js
-    cmd: bun build --minify --sourcemap src/server.ts --outdir dist/ --external bun:sqlite
+    cmd: bun build --minify --sourcemap src/server.ts --outdir dist/ --packages=external
     sources:
       - src/**/*
       - bun.lockb
