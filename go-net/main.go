@@ -5,16 +5,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/eatonphil/gosqlite"
-	"github.com/pb33f/libopenapi"
-	validator "github.com/pb33f/libopenapi-validator"
 	"log"
 	"net"
 	"net/http"
+	"net/mail"
 	"os"
 	"os/signal"
 	"reflect"
 	"syscall"
+
+	"github.com/eatonphil/gosqlite"
 )
 
 type NewPost struct {
@@ -138,6 +138,18 @@ func respondJSON(w http.ResponseWriter, status int, body interface{}) {
 	}
 }
 
+func validate(p NewPost) []string {
+	var errs []string
+	_, err := mail.ParseAddress(p.Email)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("email: %s: %v", p.Email, err))
+	}
+	if len(p.Content) < 1 {
+		errs = append(errs, "content: must be at least 1 character")
+	}
+	return errs
+}
+
 func main() {
 	var socketFile string
 	flag.StringVar(&socketFile, "socket", "/tmp/benchmark.sock", "Unix domain socket")
@@ -148,33 +160,19 @@ func main() {
 
 	go dbWriter(requests, results)
 
-	openApiJSON, err := os.ReadFile("../openapi/http.json")
-	if err != nil {
-		log.Panic(err)
-	}
-
-	document, err := libopenapi.NewDocument(openApiJSON)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	v, errs := validator.NewValidator(document)
-	if len(errs) > 0 {
-		log.Panic(errs)
-	}
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /posts", func(w http.ResponseWriter, r *http.Request) {
-		_, errs := v.ValidateHttpRequest(r)
-		if len(errs) > 0 {
-			respondJSON(w, http.StatusBadRequest, errs)
-			return
-		}
 
 		var body NewPost
 		err := json.NewDecoder(r.Body).Decode(&body)
 		if err != nil {
 			respondJSON(w, http.StatusBadRequest, "Could not read body")
+			return
+		}
+
+		errs := validate(body)
+		if len(errs) > 0 {
+			respondJSON(w, http.StatusBadRequest, errs)
 			return
 		}
 
