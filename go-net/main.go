@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -15,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/eatonphil/gosqlite"
+	"github.com/gofiber/fiber/v2"
 )
 
 type NewPost struct {
@@ -160,33 +160,40 @@ func main() {
 
 	go dbWriter(requests, results)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /posts", func(w http.ResponseWriter, r *http.Request) {
+	app := fiber.New(fiber.Config{
+		//Prefork:   true,
+		Immutable: true,
+	})
 
-		var body NewPost
-		err := json.NewDecoder(r.Body).Decode(&body)
+	app.Post("/posts", func(ctx *fiber.Ctx) error {
+		body := NewPost{}
+		err := ctx.BodyParser(&body)
 		if err != nil {
-			respondJSON(w, http.StatusBadRequest, "Could not read body")
-			return
+			return err
 		}
-
 		errs := validate(body)
 		if len(errs) > 0 {
-			respondJSON(w, http.StatusBadRequest, errs)
-			return
+			err := ctx.Status(fiber.StatusBadRequest).JSON(errs)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 
 		requests <- body
 		result, ok := <-results
 		if !ok {
-			respondJSON(w, http.StatusInternalServerError, "Server is closing")
-			return
+			return fiber.NewError(fiber.StatusInternalServerError, "Server is closing")
 		}
 
 		if result.err != nil {
-			respondJSON(w, http.StatusInternalServerError, result.err)
+			return *result.err
 		} else {
-			respondJSON(w, http.StatusOK, result.ok)
+			err := ctx.Status(fiber.StatusCreated).JSON(result.ok)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 	})
 
@@ -194,8 +201,6 @@ func main() {
 	if err != nil {
 		log.Panic(err)
 	}
-
-	server := http.Server{Handler: mux}
 
 	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
@@ -206,16 +211,14 @@ func main() {
 
 		close(requests) // closes dbWriter
 
-		err := server.Close()
+		err := app.Shutdown()
 		if err != nil {
 			log.Panic(err)
 		}
 	}()
 
-	log.Println("Listening", socketFile)
-
-	err = server.Serve(unixListener)
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+	err = app.Listener(unixListener)
+	if err != nil {
 		log.Panic(err)
 	}
 }
