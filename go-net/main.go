@@ -45,7 +45,7 @@ func closeOrPanic(c interface{ Close() error }) {
 }
 
 func dbWriter(requests chan NewPost, results chan PostResult) {
-	defer close(results)
+	defer close(results) // we're the sender
 
 	conn, err := gosqlite.Open("../db/db.sqlite")
 	if err != nil {
@@ -140,12 +140,10 @@ func respondJSON(w http.ResponseWriter, status int, body interface{}) {
 
 func main() {
 	var socketFile string
-	flag.StringVar(&socketFile, "socket", "/tmp/benchmark.sock", "Unix domain socket path. Default: /tmp/benchmark.sock")
+	flag.StringVar(&socketFile, "socket", "/tmp/benchmark.sock", "Unix domain socket")
 	flag.Parse()
 
-	requests := make(chan NewPost)
-	//defer close(requests) // closes dbWriter
-
+	requests := make(chan NewPost)   // closed below before server.Close()
 	results := make(chan PostResult) // closed by dbWriter since it's the sender
 
 	go dbWriter(requests, results)
@@ -172,6 +170,7 @@ func main() {
 			respondJSON(w, http.StatusBadRequest, errs)
 			return
 		}
+
 		var body NewPost
 		err := json.NewDecoder(r.Body).Decode(&body)
 		if err != nil {
@@ -182,7 +181,7 @@ func main() {
 		requests <- body
 		result, ok := <-results
 		if !ok {
-			respondJSON(w, http.StatusInternalServerError, "Internal error")
+			respondJSON(w, http.StatusInternalServerError, "Server is closing")
 			return
 		}
 
@@ -198,9 +197,7 @@ func main() {
 		log.Panic(err)
 	}
 
-	server := http.Server{
-		Handler: mux,
-	}
+	server := http.Server{Handler: mux}
 
 	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
@@ -217,7 +214,7 @@ func main() {
 		}
 	}()
 
-	log.Println(socketFile)
+	log.Println("Listening", socketFile)
 
 	err = server.Serve(unixListener)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {

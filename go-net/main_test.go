@@ -14,7 +14,7 @@ func testClose(t *testing.T, c interface{ Close() error }) {
 }
 
 func TestGoSQLite(t *testing.T) {
-	conn, err := gosqlite.Open("../benchmarks/http/db/db.sqlite")
+	conn, err := gosqlite.Open("../db/db.sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
