@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"net/mail"
 	"os"
 	"os/signal"
@@ -35,6 +33,11 @@ type PostResult struct {
 	err *error
 }
 
+type DbReq struct {
+	body   NewPost
+	result chan PostResult
+}
+
 func closeOrPanic(c interface{ Close() error }) {
 	log.Println("Closing", reflect.TypeOf(c))
 
@@ -44,8 +47,7 @@ func closeOrPanic(c interface{ Close() error }) {
 	}
 }
 
-func dbWriter(requests chan NewPost, results chan PostResult) {
-	defer close(results) // we're the sender
+func dbWriter(requests chan DbReq) {
 
 	conn, err := gosqlite.Open("../db/db.sqlite")
 	if err != nil {
@@ -92,12 +94,13 @@ func dbWriter(requests chan NewPost, results chan PostResult) {
 	for req := range requests {
 		res := Post{}
 		err = conn.WithTxImmediate(func() error {
-			err := insertUser.Exec(req.Email)
+			body := req.body
+			err := insertUser.Exec(body.Email)
 			if err != nil {
 				return err
 			}
 
-			err = insertPost.Bind(req.Content, req.Email)
+			err = insertPost.Bind(body.Content, body.Email)
 			if err != nil {
 				return err
 			}
@@ -120,21 +123,10 @@ func dbWriter(requests chan NewPost, results chan PostResult) {
 			return nil
 		})
 		if err != nil {
-			results <- PostResult{ok: nil, err: &err}
+			req.result <- PostResult{ok: nil, err: &err}
 		} else {
-			results <- PostResult{ok: &res, err: nil}
+			req.result <- PostResult{ok: &res, err: nil}
 		}
-	}
-}
-
-func respondJSON(w http.ResponseWriter, status int, body interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-
-	// write body json
-	err := json.NewEncoder(w).Encode(body)
-	if err != nil {
-		log.Panic(err)
 	}
 }
 
@@ -157,10 +149,9 @@ func main() {
 	flag.IntVar(&port, "port", 0, "HTTP port")
 	flag.Parse()
 
-	requests := make(chan NewPost)   // closed below before server.Close()
-	results := make(chan PostResult) // closed by dbWriter since it's the sender
+	requests := make(chan DbReq, 100) // closed below before server.Close()
 
-	go dbWriter(requests, results)
+	go dbWriter(requests)
 
 	app := fiber.New(fiber.Config{
 		Prefork:   port > 0,
@@ -182,16 +173,19 @@ func main() {
 			return nil
 		}
 
-		requests <- body
-		result, ok := <-results
+		result := make(chan PostResult, 1)
+		defer close(result)
+
+		requests <- DbReq{body: body, result: result}
+		res, ok := <-result
 		if !ok {
 			return fiber.NewError(fiber.StatusInternalServerError, "Server is closing")
 		}
 
-		if result.err != nil {
-			return *result.err
+		if res.err != nil {
+			return *res.err
 		} else {
-			err := ctx.Status(fiber.StatusCreated).JSON(result.ok)
+			err := ctx.Status(fiber.StatusCreated).JSON(res.ok)
 			if err != nil {
 				return err
 			}
