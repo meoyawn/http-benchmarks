@@ -5,7 +5,7 @@
 
 ## TODO
 
-- [x] Golang Fiber: 42K rps, p50 1.1ms
+- [x] Go FastHTTP: 43K rps, p50 1.1ms
 - [x] Vert.x
   - [x] JVM: 33K rps, p50 1.4ms
   - [ ] Graal

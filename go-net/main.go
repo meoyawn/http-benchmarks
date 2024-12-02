@@ -1,10 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/mail"
 	"os"
 	"os/signal"
@@ -12,7 +12,8 @@ import (
 	"syscall"
 
 	"github.com/eatonphil/gosqlite"
-	"github.com/gofiber/fiber/v2"
+	"github.com/fasthttp/router"
+	"github.com/valyala/fasthttp"
 )
 
 type NewPost struct {
@@ -153,21 +154,25 @@ func main() {
 
 	go dbWriter(requests)
 
-	app := fiber.New(fiber.Config{})
-
-	app.Post("/posts", func(ctx *fiber.Ctx) error {
+	router := router.New()
+	router.POST("/posts", func(ctx *fasthttp.RequestCtx) {
 		body := NewPost{}
-		err := ctx.BodyParser(&body)
+		err := json.Unmarshal(ctx.PostBody(), &body)
 		if err != nil {
-			return err
+			ctx.Error("POST body", fasthttp.StatusBadRequest)
+			return
 		}
+
+		ctx.Response.Header.Set("Content-Type", "application/json")
+
 		errs := validate(body)
 		if len(errs) > 0 {
-			err := ctx.Status(fiber.StatusBadRequest).JSON(errs)
+			ctx.Response.SetStatusCode(fasthttp.StatusBadRequest)
+			err := json.NewEncoder(ctx.Response.BodyWriter()).Encode(errs)
 			if err != nil {
-				return err
+				ctx.Error("JSON", fasthttp.StatusInternalServerError)
 			}
-			return nil
+			return
 		}
 
 		result := make(chan PostResult, 1)
@@ -176,19 +181,25 @@ func main() {
 		requests <- DbReq{body: body, result: result}
 		res, ok := <-result
 		if !ok {
-			return fiber.NewError(fiber.StatusInternalServerError, "Server is closing")
+			ctx.Error("Closing", fasthttp.StatusInternalServerError)
+			return
 		}
 
 		if res.err != nil {
-			return *res.err
+			ctx.Error((*res.err).Error(), fasthttp.StatusInternalServerError)
 		} else {
-			err := ctx.Status(fiber.StatusCreated).JSON(res.ok)
+			ctx.Response.SetStatusCode(fasthttp.StatusCreated)
+			err := json.NewEncoder(ctx.Response.BodyWriter()).Encode(res.ok)
 			if err != nil {
-				return err
+				ctx.Error("JSON", fasthttp.StatusInternalServerError)
 			}
-			return nil
 		}
 	})
+
+	app := fasthttp.Server{
+		Handler:         router.Handler,
+		CloseOnShutdown: true,
+	}
 
 	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
@@ -206,17 +217,13 @@ func main() {
 	}()
 
 	if port > 0 {
-		err := app.Listen(fmt.Sprintf(":%d", port))
+		err := app.ListenAndServe(fmt.Sprintf(":%d", port))
 		if err != nil {
 			log.Panic(err)
 		}
 	} else {
-		unixListener, err := net.Listen("unix", socketFile)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		err = app.Listener(unixListener)
+		log.Println("Listening on", socketFile)
+		err := app.ListenAndServeUNIX(socketFile, os.FileMode(0666))
 		if err != nil {
 			log.Panic(err)
 		}
