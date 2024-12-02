@@ -1,7 +1,8 @@
 # HTTP server benchmarks
 
-- OpenAPI validation
-- SQLite INSERT
+- HTTP POST JSON
+- Request validation
+- SQLite transaction
 
 ## TODO
 
@@ -13,6 +14,6 @@
 - [ ] Zig
 - [ ] Elixir
 
-## Out
+## Skip
 
 - Kotlin Native Ktor: can't listen on unix domain sockets
