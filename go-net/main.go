@@ -8,7 +8,6 @@ import (
 	"net/mail"
 	"os"
 	"os/signal"
-	"reflect"
 	"syscall"
 
 	"github.com/eatonphil/gosqlite"
@@ -40,7 +39,7 @@ type DbReq struct {
 }
 
 func closeOrPanic(c interface{ Close() error }) {
-	log.Println("Closing", reflect.TypeOf(c))
+	log.Printf("Closing %+v", c)
 
 	err := c.Close()
 	if err != nil {
@@ -179,11 +178,7 @@ func main() {
 		defer close(result)
 
 		requests <- DbReq{body: body, result: result}
-		res, ok := <-result
-		if !ok {
-			ctx.Error("Closing", fasthttp.StatusInternalServerError)
-			return
-		}
+		res := <-result
 
 		if res.err != nil {
 			ctx.Error((*res.err).Error(), fasthttp.StatusInternalServerError)
@@ -196,7 +191,7 @@ func main() {
 		}
 	})
 
-	app := fasthttp.Server{
+	server := fasthttp.Server{
 		Handler:         router.Handler,
 		CloseOnShutdown: true,
 	}
@@ -210,20 +205,21 @@ func main() {
 
 		close(requests) // closes dbWriter
 
-		err := app.Shutdown()
+		err := server.Shutdown()
 		if err != nil {
 			log.Panic(err)
 		}
 	}()
 
 	if port > 0 {
-		err := app.ListenAndServe(fmt.Sprintf(":%d", port))
+		err := server.ListenAndServe(fmt.Sprintf(":%d", port))
 		if err != nil {
 			log.Panic(err)
 		}
 	} else {
 		log.Println("Listening on", socketFile)
-		err := app.ListenAndServeUNIX(socketFile, os.FileMode(0666))
+
+		err := server.ListenAndServeUNIX(socketFile, os.FileMode(0666))
 		if err != nil {
 			log.Panic(err)
 		}
