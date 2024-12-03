@@ -28,6 +28,7 @@ const App = struct {
     db: sqlite.Db,
     insertUser: sqlite.Statement(.{}, sqlite.ParsedQuery(INSERT_USER)),
     insertPost: sqlite.Statement(.{}, sqlite.ParsedQuery(INSERT_POST)),
+    writeMutex: std.Thread.Mutex = std.Thread.Mutex{},
 };
 
 const OPEN_PRAGMAS =
@@ -78,9 +79,13 @@ pub fn main() !void {
         .insertPost = insertPost,
     };
 
-    var server = try httpz.ServerApp(*App).init(allocator, .{
-        .unix_path = socket,
-    }, &app);
+    var server = try httpz.ServerApp(*App).init(
+        allocator,
+        .{
+            .unix_path = socket,
+        },
+        &app,
+    );
     defer {
         std.debug.print("Shutting down server\n", .{});
         // clean shutdown, finishes serving any live request
@@ -141,6 +146,9 @@ fn commit(db: *sqlite.Db) !void {
 }
 
 fn runTransaction(alloc: Allocator, app: *App, body: NewPost) !Post {
+    app.writeMutex.lock();
+    defer app.writeMutex.unlock();
+
     try beginImmediate(&app.db);
     errdefer rollback(&app.db);
 
