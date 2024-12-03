@@ -1,0 +1,10 @@
+version: 3
+
+tasks:
+  start:
+    cmd: zig build run
+  sources:
+    - src/**/*
+    - build.zig*
+  generates:
+    - zig-out/bin/zig
