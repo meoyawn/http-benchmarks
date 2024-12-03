@@ -8,3 +8,11 @@ tasks:
     - build.zig*
   generates:
     - zig-out/bin/zig
+
+  test:
+    cmd: zig build test --summary all
+    sources:
+      - src/**/*
+      - build.zig*
+    generates:
+      - zig-out/bin/zig
