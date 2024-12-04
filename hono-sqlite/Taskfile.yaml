@@ -7,16 +7,14 @@ vars:
 
 tasks:
   openapi:
-    cmd: bun responsible ../http.kdl -o openapi.json
+    cmd: bun responsible ../openapi/http.kdl -o ../openapi/http.json
     sources:
-      - ../http.kdl
+      - ../openapi/http.kdl
       - bun.lockb
     generates:
-      - openapi.json
+      - ../openapi/http.json
 
   start:
-    deps:
-      - openapi
     cmd: bun --watch src/server.ts
 
   jbuild:

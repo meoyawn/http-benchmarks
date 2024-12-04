@@ -7,6 +7,12 @@
 
 ## Results
 
+Apple M1 Pro, running everything on the same machine
+
+```sh
+oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
+```
+
 - [x] Go FastHTTP: 43K rps, p50 1.1ms
 - [x] Kotlin Vert.x
   - [x] JVM: 33K rps, p50 1.4ms
@@ -16,6 +22,6 @@
 - [ ] Elixir
 - [ ] Python
 
-## WONTDO
+## Won't do
 
 - Kotlin Native Ktor: can't listen on unix domain sockets

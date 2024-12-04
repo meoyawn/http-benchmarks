@@ -12,6 +12,8 @@ PRAGMA journal_mode = wal;
 PRAGMA synchronous = normal;
 PRAGMA foreign_keys = on;
 PRAGMA busy_timeout = 10000;
+
+PRAGMA optimize = 0x10002;
 `)
 
 const insertUser = db.prepare<void, [email: string]>(`
@@ -84,7 +86,7 @@ async function shutdown() {
   db.exec("PRAGMA optimize")
   db.close(true)
 
-  await server.stop(true)
+  await server.stop()
   await fs.rm(unix)
 }
 
