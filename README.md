@@ -1,13 +1,14 @@
 # HTTP server benchmarks
 
-- HTTP POST JSON
+- HTTP over unix domain socket
+- POST JSON
 - Request validation
-- SQLite transaction
+- [SQLite transaction](db/migrations/001_init.up.sql)
 
-## TODO
+## Results
 
 - [x] Go FastHTTP: 43K rps, p50 1.1ms
-- [x] Vert.x
+- [x] Kotlin Vert.x
   - [x] JVM: 33K rps, p50 1.4ms
   - [ ] Graal
 - [x] Bun Hono: 21K rps, p50 1.9ms
@@ -15,6 +16,6 @@
 - [ ] Elixir
 - [ ] Python
 
-## Skip
+## WONTDO
 
 - Kotlin Native Ktor: can't listen on unix domain sockets
