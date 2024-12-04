@@ -22,6 +22,10 @@ const Post = struct {
     content: String,
     created_at: i64,
     updated_at: i64,
+
+    fn deinit(self: Post, alloc: Allocator) void {
+        alloc.free(self.content);
+    }
 };
 
 const App = struct {
@@ -158,7 +162,7 @@ fn runTransaction(alloc: Allocator, app: *App, body: NewPost) !Post {
     const post = try app.insertPost.oneAlloc(Post, alloc, .{}, .{ body.content, body.email });
     app.insertPost.reset();
 
-    errdefer alloc.free(post.?.content);
+    errdefer post.?.deinit(alloc);
 
     try commit(&app.db);
 
@@ -236,7 +240,7 @@ test "transaction" {
     const content = "hello";
 
     const post = try runTransaction(t.allocator, &app, .{ .content = content, .email = "foo@gmail.com" });
-    defer t.allocator.free(post.content);
+    defer post.deinit(t.allocator);
 
     try t.expectEqualStrings(content, post.content);
 }
