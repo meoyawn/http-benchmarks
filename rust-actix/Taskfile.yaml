@@ -1,0 +1,16 @@
+version: 3
+
+tasks:
+  build:
+    cmd: cargo build --release
+    sources:
+      - src/**/*
+      - Cargo.toml
+      - Cargo.lock
+    generates:
+      - target/release/rust-actix
+
+  start:
+    deps:
+      - build
+    cmd: target/release/rust-actix

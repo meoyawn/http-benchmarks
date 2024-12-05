@@ -4,8 +4,11 @@ name = "rust-actix"
 version = "0.1.0"
 
 [dependencies]
+actix = "0.13.5"
 actix-web = "4.9.0"
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 validator = { version = "0.19", features = ["derive"] }
-actix = "0.13.5"
+
+[profile.release]
+opt-level = 3
