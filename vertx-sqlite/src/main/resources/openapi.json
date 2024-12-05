@@ -116,6 +116,44 @@
           }
         }
       }
+    },
+    "/echo": {
+      "post": {
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPost"
+              }
+            }
+          },
+          "required": true
+        },
+        "operationId": "echo",
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "content-length": {
+                "required": true,
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewPost"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

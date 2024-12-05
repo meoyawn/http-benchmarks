@@ -43,3 +43,11 @@ POST "/posts" {
     "400" "unknown"
   }
 }
+
+POST "/echo" {
+  name "echo"
+  req "NewPost"
+  res {
+    "200" "NewPost"
+  }
+}

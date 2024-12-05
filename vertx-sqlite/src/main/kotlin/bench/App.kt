@@ -47,6 +47,11 @@ class App(private val db: Db) : CoroutineVerticle() {
                 ctx.response().statusCode = 201
                 ctx.json(post)
             }
+
+            operation("echo").handler {
+                val body = it.body().asPojo(NewPost::class.java)
+                it.json(body)
+            }
         }.createRouter()
 
         val host = config.getString("http.host", "localhost")

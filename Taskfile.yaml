@@ -4,6 +4,7 @@ vars:
   GO_MIGRATE: ../../../github/migrate/cmd/migrate/migrate
   MIGRATIONS_DIR: db/migrations
   DB_FILE: db/db.sqlite
+  UNIX_SOCKET: /tmp/benchmark.sock
 
 tasks:
   migrate:
@@ -33,8 +34,8 @@ tasks:
 
   post:
     cmd: >
-      oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
+      oha http://localhost/posts --no-tui --unix-socket {{.UNIX_SOCKET}} -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
 
-  tcppost:
+  echo:
     cmd: >
-      oha http://localhost:3000/posts --no-tui -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
+      oha http://localhost/echo --no-tui --unix-socket {{.UNIX_SOCKET}} -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "foo@gmail.com" }'

@@ -24,3 +24,15 @@ oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m 
 ## Won't do
 
 - Kotlin Native Ktor: can't listen on unix domain sockets
+
+## Bonus
+
+HTTP POST JSON echo
+
+```sh
+oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
+```
+
+| Framework     | RPS  | p50 latency |
+| ------------- | ---- | ----------- |
+| Kotlin Vert.x | 158K | 0.3ms       |
