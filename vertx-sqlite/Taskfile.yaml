@@ -17,12 +17,6 @@ tasks:
     generates:
       - src/main/resources/openapi.json
 
-  start:
-    deps:
-      - openapi
-    cmds:
-      - ./gradlew run
-
   build:
     deps:
       - openapi
@@ -34,7 +28,7 @@ tasks:
     generates:
       - "{{.JAR}}"
 
-  bstart:
+  start:
     deps:
       - build
     cmd: java -server -XX:+PerfDisableSharedMem -Dhttp.socket={{.UNIX_SOCKET}} -jar {{.JAR}}

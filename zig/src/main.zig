@@ -4,6 +4,7 @@ const sqlite = @import("sqlite");
 const mvzr = @import("mvzr");
 
 const Allocator = std.mem.Allocator;
+
 const String = []const u8;
 
 const INSERT_USER = "INSERT OR IGNORE INTO users (email) VALUES (?);";
@@ -43,10 +44,11 @@ const OPEN_PRAGMAS =
     \\ PRAGMA optimize = 0x10002;
 ;
 
-fn openPragmas(db: *sqlite.Db) !void {
+fn openPragmas(conn: *sqlite.Db) !void {
     var it = std.mem.splitScalar(u8, OPEN_PRAGMAS, '\n');
     while (it.next()) |expr| {
-        _ = try db.oneDynamic(void, expr, .{}, .{});
+        // exec throws because pragma returns a result
+        _ = try conn.oneDynamic(void, expr, .{}, .{});
     }
 }
 
@@ -62,7 +64,7 @@ pub fn main() !void {
         .open_flags = .{
             .write = true,
         },
-        .threading_mode = .Serialized,
+        .threading_mode = .SingleThread,
     });
     defer {
         db.exec("PRAGMA optimize;", .{}, .{}) catch |err| std.debug.panic("Couldn't PRAGMA optimize: {}", .{err});
@@ -91,13 +93,11 @@ pub fn main() !void {
         &app,
     );
     defer {
-        std.debug.print("Shutting down server\n", .{});
-        // clean shutdown, finishes serving any live request
         server.stop();
         server.deinit();
     }
     var router = server.router();
-    router.post("/posts", postPosts);
+    router.post("/posts", httpPost);
 
     std.debug.print("Listening on {s}\n", .{socket});
     try server.listen();
@@ -137,19 +137,19 @@ fn deinitList(arr: std.ArrayList(String)) void {
     arr.deinit();
 }
 
-fn beginImmediate(db: *sqlite.Db) !void {
-    _ = try db.exec("BEGIN IMMEDIATE TRANSACTION;", .{}, .{});
+fn beginImmediate(conn: *sqlite.Db) !void {
+    return conn.exec("BEGIN IMMEDIATE TRANSACTION;", .{}, .{});
 }
 
-fn rollback(db: *sqlite.Db) void {
-    return db.exec("ROLLBACK;", .{}, .{}) catch |err| std.debug.panic("Couldn't ROLLBACK: {}", .{err});
+fn rollback(conn: *sqlite.Db) void {
+    return conn.exec("ROLLBACK;", .{}, .{}) catch |err| std.debug.panic("Couldn't ROLLBACK: {}", .{err});
 }
 
 fn commit(db: *sqlite.Db) !void {
     return db.exec("COMMIT;", .{}, .{});
 }
 
-fn runTransaction(alloc: Allocator, app: *App, body: NewPost) !Post {
+fn transact(alloc: Allocator, app: *App, body: NewPost) !Post {
     app.writeMutex.lock();
     defer app.writeMutex.unlock();
 
@@ -169,7 +169,7 @@ fn runTransaction(alloc: Allocator, app: *App, body: NewPost) !Post {
     return post orelse error.EmptyQuery;
 }
 
-fn postPosts(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
+fn httpPost(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     const body: NewPost = try req.json(NewPost) orelse {
         res.status = 400;
         return res.json("POST body", .{});
@@ -177,15 +177,15 @@ fn postPosts(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
 
     const errs = try validate(req.arena, body);
     defer deinitList(errs);
-
     if (errs.items.len > 0) {
         res.status = 400;
         return res.json(errs.items, .{});
     }
 
-    const post = try runTransaction(req.arena, app, body);
-    defer req.arena.free(post.content);
+    const post = try transact(req.arena, app, body);
+    defer post.deinit(req.arena);
 
+    res.status = 201;
     return res.json(post, .{});
 }
 
@@ -216,7 +216,6 @@ test "transaction" {
         .open_flags = .{
             .write = true,
         },
-        .threading_mode = .SingleThread,
     });
     defer {
         db.exec("PRAGMA optimize;", .{}, .{}) catch |err| std.debug.panic("Couldn't PRAGMA optimize: {}", .{err});
@@ -239,7 +238,7 @@ test "transaction" {
 
     const content = "hello";
 
-    const post = try runTransaction(t.allocator, &app, .{ .content = content, .email = "foo@gmail.com" });
+    const post = try transact(t.allocator, &app, .{ .content = content, .email = "foo@gmail.com" });
     defer post.deinit(t.allocator);
 
     try t.expectEqualStrings(content, post.content);

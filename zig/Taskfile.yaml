@@ -1,13 +1,18 @@
 version: 3
 
 tasks:
+  build:
+    cmd: zig build -Doptimize=ReleaseFast
+    sources:
+      - src/**/*
+      - build.zig*
+    generates:
+      - zig-out/bin/zig
+
   start:
-    cmd: zig build run
-  sources:
-    - src/**/*
-    - build.zig*
-  generates:
-    - zig-out/bin/zig
+    deps:
+      - build
+    cmd: zig-out/bin/zig
 
   test:
     cmd: zig build test --summary all
