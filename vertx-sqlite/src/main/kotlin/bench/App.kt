@@ -2,16 +2,18 @@ package bench
 
 import io.vertx.core.impl.logging.LoggerFactory
 import io.vertx.core.net.SocketAddress
+import io.vertx.ext.web.Route
+import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
+import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.ext.web.handler.HttpException
-import io.vertx.ext.web.openapi.Operation
-import io.vertx.ext.web.openapi.RouterBuilder
+import io.vertx.json.schema.common.RegularExpressions
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-private inline fun Operation.coHandle(scope: CoroutineScope, crossinline f: suspend (ctx: RoutingContext) -> Unit) =
+private inline fun Route.coHandle(scope: CoroutineScope, crossinline f: suspend (ctx: RoutingContext) -> Unit) =
     handler { ctx ->
         scope.launch {
             try {
@@ -27,6 +29,31 @@ private data class NewPost(
     val content: String,
 )
 
+private fun NewPost.validate(): List<String> {
+    val errors = ArrayList<String>(2)
+    if (content.isEmpty()) errors.add("content: must not be empty")
+    if (!RegularExpressions.EMAIL.matcher(email).matches()) errors.add("email: invalid: $email")
+    return errors
+}
+
+private suspend fun httpPost(db: Db, ctx: RoutingContext) {
+    val body = ctx.body().asPojo(NewPost::class.java) ?: throw HttpException(400)
+    val errs = body.validate()
+    if (errs.isNotEmpty()) {
+        ctx.response().statusCode = 400
+        ctx.json(errs)
+        return
+    }
+
+    val post = db.tx {
+        insertUser(body.email)
+        insertPost(email = body.email, content = body.content)
+    }
+
+    ctx.response().statusCode = 201
+    ctx.json(post)
+}
+
 class App(private val db: Db) : CoroutineVerticle() {
 
     private companion object {
@@ -35,24 +62,18 @@ class App(private val db: Db) : CoroutineVerticle() {
 
     override suspend fun start() {
 
-        val router = RouterBuilder.create(vertx, "openapi.json").coAwait().apply {
-            operation("newPost").coHandle(scope = this@App) { ctx ->
-                val body = ctx.body().asPojo(NewPost::class.java) ?: throw HttpException(400)
+        val router = Router.router(vertx).apply {
+            route().handler(BodyHandler.create(false))
 
-                val post = db.tx {
-                    insertUser(body.email)
-                    insertPost(email = body.email, content = body.content)
-                }
-
-                ctx.response().statusCode = 201
-                ctx.json(post)
+            post("/posts").coHandle(scope = this@App) {
+                httpPost(db, it)
             }
 
-            operation("echo").handler {
+            post("/echo").handler {
                 val body = it.body().asPojo(NewPost::class.java)
                 it.json(body)
             }
-        }.createRouter()
+        }
 
         val host = config.getString("http.host", "localhost")
         val port = config.getInteger("http.port", 8080)

@@ -18,8 +18,6 @@ tasks:
       - src/main/resources/openapi.json
 
   build:
-    deps:
-      - openapi
     cmd: ./gradlew sJ
     sources:
       - src/**/*

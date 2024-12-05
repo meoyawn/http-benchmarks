@@ -36,7 +36,7 @@ dependencies {
         "io.vertx:vertx-config",
         "io.vertx:vertx-lang-kotlin-coroutines",
         "io.vertx:vertx-web",
-        "io.vertx:vertx-web-openapi",
+        "io.vertx:vertx-json-schema",
     )
     if (System.getProperty('os.name') == 'Mac OS X' && System.getProperty('os.arch') == 'aarch64') {
         implementation(
