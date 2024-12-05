@@ -46,26 +46,31 @@ type NewPost = v.InferInput<typeof NewPost>
 
 const safeParse = v.safeParser(NewPost)
 
-const hono = new Hono().post(
-  "/posts",
-  validator("json", (value, c) => {
-    const x = safeParse(value)
-    if (!x.success) return c.json(x.issues, 400)
-    return x.output
-  }),
-  ctx => {
-    const body = ctx.req.valid("json")
+const hono = new Hono()
+  .post(
+    "/posts",
+    validator("json", (value, c) => {
+      const x = safeParse(value)
+      if (!x.success) return c.json(x.issues, 400)
+      return x.output
+    }),
+    ctx => {
+      const body = ctx.req.valid("json")
 
-    let post: Post | null = null
-    db.transaction(({ content, email }: NewPost) => {
-      insertUser.run(email)
-      post = insertPost.get(content, email)
-      if (!post) throw new HTTPException(500)
-    }).immediate(body)
+      let post: Post | null = null
+      db.transaction(({ content, email }: NewPost) => {
+        insertUser.run(email)
+        post = insertPost.get(content, email)
+        if (!post) throw new HTTPException(500)
+      }).immediate(body)
 
-    return ctx.json(post, 201)
-  },
-)
+      return ctx.json(post, 201)
+    },
+  )
+  .post("/echo", async ctx => {
+    const body = await ctx.req.json()
+    return ctx.json(body)
+  })
 
 const unix = "/tmp/benchmark.sock"
 

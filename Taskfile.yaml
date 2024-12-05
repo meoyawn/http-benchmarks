@@ -38,4 +38,4 @@ tasks:
 
   echo:
     cmd: >
-      oha http://localhost/echo --unix-socket /tmp/benchmark.sock -z 60s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "foo@gmail.com" }'
+      oha http://localhost/echo --no-tui --unix-socket {{.UNIX_SOCKET}} -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "foo@gmail.com" }'

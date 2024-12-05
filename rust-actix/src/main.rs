@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::io;
 use validator::Validate;
 
-#[derive(Debug, Validate, Deserialize)]
+#[derive(Debug, Validate, Deserialize, Serialize)]
 struct NewPost {
     #[validate(length(min = 1))]
     content: String,
@@ -51,6 +51,11 @@ impl Handler<NewPost> for DbActor {
     fn handle(&mut self, msg: NewPost, _: &mut Self::Context) -> Self::Result {
         transact(&self.conn, &msg)
     }
+}
+
+#[post("/echo")]
+async fn http_echo(body: web::Json<NewPost>) -> actix_web::Result<HttpResponse> {
+    Ok(HttpResponse::Ok().json(body))
 }
 
 #[post("/posts")]
@@ -147,7 +152,7 @@ async fn main() -> io::Result<()> {
 
     println!("Listening on {}", socket);
 
-    HttpServer::new(move || App::new().app_data(data.clone()).service(http_post))
+    HttpServer::new(move || App::new().app_data(data.clone()).service(http_post).service(http_echo))
         .bind_uds(socket)?
         .run()
         .await

@@ -30,11 +30,13 @@ oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m 
 HTTP POST JSON echo
 
 ```sh
-oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
+oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "foo@gmail.com" }'
 ```
 
-| Framework     | RPS  | p50 latency |
-| ------------- | ---- | ----------- |
-| Zig http.zig  | 291K | 0.2ms       |
-| Go FastHTTP   | 256K | 0.2ms       |
-| Kotlin Vert.x | 158K | 0.3ms       |
+| Framework      | RPS  | p50 latency |
+| -------------- | ---- | ----------- |
+| Kotlin Vert.x  | 274K | 0.2ms       |
+| Rust Actix-Web | 266K | 0.2ms       |
+| Zig http.zig   | 264K | 0.2ms       |
+| Go FastHTTP    | 199K | 0.2ms       |
+| Bun Hono       | 154K | 0.3ms       |
