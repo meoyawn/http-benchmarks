@@ -167,7 +167,7 @@ func main() {
 		errs := validate(body)
 		if len(errs) > 0 {
 			ctx.Response.SetStatusCode(fasthttp.StatusBadRequest)
-			err := json.NewEncoder(ctx.Response.BodyWriter()).Encode(errs)
+			err := json.NewEncoder(ctx).Encode(errs)
 			if err != nil {
 				ctx.Error("JSON", fasthttp.StatusInternalServerError)
 			}
@@ -184,10 +184,25 @@ func main() {
 			ctx.Error((*res.err).Error(), fasthttp.StatusInternalServerError)
 		} else {
 			ctx.Response.SetStatusCode(fasthttp.StatusCreated)
-			err := json.NewEncoder(ctx.Response.BodyWriter()).Encode(res.ok)
+			err := json.NewEncoder(ctx).Encode(res.ok)
 			if err != nil {
 				ctx.Error("JSON", fasthttp.StatusInternalServerError)
 			}
+		}
+	})
+
+	router.POST("/echo", func(ctx *fasthttp.RequestCtx) {
+		body := NewPost{}
+		err := json.Unmarshal(ctx.PostBody(), &body)
+		if err != nil {
+			ctx.Error("POST body", fasthttp.StatusBadRequest)
+			return
+		}
+
+		ctx.Response.Header.Set("Content-Type", "application/json")
+		err = json.NewEncoder(ctx).Encode(body)
+		if err != nil {
+			ctx.Error("JSON", fasthttp.StatusInternalServerError)
 		}
 	})
 

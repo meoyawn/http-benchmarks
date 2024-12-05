@@ -35,4 +35,6 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 
 | Framework     | RPS  | p50 latency |
 | ------------- | ---- | ----------- |
+| Zig http.zig  | 291K | 0.2ms       |
+| Go FastHTTP   | 256K | 0.2ms       |
 | Kotlin Vert.x | 158K | 0.3ms       |

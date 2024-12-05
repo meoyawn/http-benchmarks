@@ -98,6 +98,7 @@ pub fn main() !void {
     }
     var router = server.router();
     router.post("/posts", httpPost);
+    router.post("/echo", httpEcho);
 
     std.debug.print("Listening on {s}\n", .{socket});
     try server.listen();
@@ -187,6 +188,14 @@ fn httpPost(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
 
     res.status = 201;
     return res.json(post, .{});
+}
+
+fn httpEcho(_: *App, req: *httpz.Request, res: *httpz.Response) !void {
+    const body: NewPost = try req.json(NewPost) orelse {
+        res.status = 400;
+        return res.json("POST body", .{});
+    };
+    return res.json(body, .{});
 }
 
 test "invalid post" {
