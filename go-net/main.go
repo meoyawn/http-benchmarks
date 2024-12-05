@@ -154,6 +154,22 @@ func main() {
 	go dbWriter(requests)
 
 	router := router.New()
+
+	router.POST("/echo", func(ctx *fasthttp.RequestCtx) {
+		body := NewPost{}
+		err := json.Unmarshal(ctx.PostBody(), &body)
+		if err != nil {
+			ctx.Error("POST body", fasthttp.StatusBadRequest)
+			return
+		}
+
+		ctx.Response.Header.Set("Content-Type", "application/json")
+		err = json.NewEncoder(ctx).Encode(body)
+		if err != nil {
+			ctx.Error("JSON", fasthttp.StatusInternalServerError)
+		}
+	})
+
 	router.POST("/posts", func(ctx *fasthttp.RequestCtx) {
 		body := NewPost{}
 		err := json.Unmarshal(ctx.PostBody(), &body)
@@ -188,21 +204,6 @@ func main() {
 			if err != nil {
 				ctx.Error("JSON", fasthttp.StatusInternalServerError)
 			}
-		}
-	})
-
-	router.POST("/echo", func(ctx *fasthttp.RequestCtx) {
-		body := NewPost{}
-		err := json.Unmarshal(ctx.PostBody(), &body)
-		if err != nil {
-			ctx.Error("POST body", fasthttp.StatusBadRequest)
-			return
-		}
-
-		ctx.Response.Header.Set("Content-Type", "application/json")
-		err = json.NewEncoder(ctx).Encode(body)
-		if err != nil {
-			ctx.Error("JSON", fasthttp.StatusInternalServerError)
 		}
 	})
 

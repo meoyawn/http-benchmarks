@@ -65,13 +65,13 @@ class App(private val db: Db) : CoroutineVerticle() {
         val router = Router.router(vertx).apply {
             route().handler(BodyHandler.create(false))
 
-            post("/posts").coHandle(scope = this@App) {
-                httpPost(db, it)
-            }
-
             post("/echo").handler {
                 val body = it.body().asPojo(NewPost::class.java)
                 it.json(body)
+            }
+
+            post("/posts").coHandle(scope = this@App) {
+                httpPost(db, it)
             }
         }
 
