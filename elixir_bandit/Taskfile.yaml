@@ -1,0 +1,24 @@
+version: 3
+
+vars:
+  BINARY: _build/prod/rel/elixir_bandit/bin/elixir_bandit
+
+tasks:
+  build:
+    env:
+      MIX_ENV: prod
+    cmd: mix release --overwrite
+    sources:
+      - Taskfile.yaml
+      - lib/**/*
+      - mix.exs
+      - mix.lock
+    generates:
+      - "{{.BINARY}}"
+
+  start:
+    deps:
+      - build
+    cmds:
+      - rm /tmp/benchmark.sock
+      - "{{.BINARY}} start"

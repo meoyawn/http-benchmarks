@@ -40,3 +40,4 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 | Kotlin Vert.x  | 204K | 0.2ms       |
 | Go FastHTTP    | 199K | 0.2ms       |
 | Bun Hono       | 154K | 0.3ms       |
+| Elixir Bandit  | 139K | 0.3ms       |
