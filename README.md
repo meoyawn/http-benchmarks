@@ -20,6 +20,7 @@ oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m 
 | Go FastHTTP    | 43K | 1.1ms       |
 | Kotlin Vert.x  | 33K | 1.4ms       |
 | Bun Hono       | 21K | 1.9ms       |
+| Elixir Bandit  | 10K | 4.9ms       |
 
 ## Won't do
 

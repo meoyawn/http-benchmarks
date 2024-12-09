@@ -28,25 +28,12 @@ defmodule CachedConn do
   end
 
   def immediate(cc, func) do
-    with {:ok, state, begin} <- prepare(cc, "BEGIN IMMEDIATE TRANSACTION"),
-         :done <- Sqlite3.step(state.conn, begin) do
-      with {:ok, state, result} <- func.(state),
-           {:ok, state, commit} <- prepare(state, "COMMIT"),
-           :done <- Sqlite3.step(state.conn, commit) do
-        {:ok, state, result}
-      else
-        {:error, reason} ->
-          with {:ok, state, rollback} <- prepare(cc, "ROLLBACK"),
-               :done <- Sqlite3.step(state.conn, rollback) do
-            {:error, reason}
-          else
-            {:error, reason} -> {:error, reason}
-          end
-      end
-    else
-      {:error, reason} ->
-        {:error, reason}
-    end
+    {:ok, state, begin} = prepare(cc, "BEGIN IMMEDIATE TRANSACTION")
+    :done = Sqlite3.step(state.conn, begin)
+    {:ok, state, result} = func.(state)
+    {:ok, state, commit} = prepare(state, "COMMIT")
+    :done = Sqlite3.step(state.conn, commit)
+    {:ok, state, result}
   end
 end
 
@@ -74,10 +61,14 @@ defmodule DbWriter do
   RETURNING   id, user_id, content, created_at, updated_at
   """
 
+  def start_link(path) do
+    GenServer.start_link(__MODULE__, path, name: __MODULE__)
+  end
+
   @impl true
   @spec init(path :: String.t()) :: {:ok, CachedConn.t()} | {:stop, Sqlite3.reason()}
   def init(path) do
-    with {:ok, conn} <- Sqlite3.open(path),
+    with {:ok, conn} <- Sqlite3.open(path, mode: [:readwrite, :nomutex]),
          :ok <- Sqlite3.execute(conn, @open_pragmas) do
       {:ok, %CachedConn{conn: conn, cache: %{}}}
     else
@@ -85,37 +76,48 @@ defmodule DbWriter do
     end
   end
 
-  @impl true
-  def handle_call(request, _from, state) do
-    case CachedConn.immediate(state, fn state ->
-           with {:ok, state, iu} <- CachedConn.prepare(state, @insert_user),
-                :ok <- Sqlite3.bind(iu, [request.email]),
-                :done <- Sqlite3.step(state.conn, iu),
-                {:ok, state, ip} <- CachedConn.prepare(state, @insert_post),
-                :ok <- Sqlite3.bind(ip, [request.content, request.email]),
-                {:row, [id, user_id, content, created_at, updated_at]} <-
-                  Sqlite3.step(state.conn, ip) do
-             {:reply,
-              %{
-                id: id,
-                user_id: user_id,
-                content: content,
-                created_at: created_at,
-                updated_at: updated_at
-              }, state}
-           else
-             {:error, reason} -> {:reply, reason, state}
-           end
-         end) do
-      {:ok, state, result} -> {:reply, result, state}
-      {:error, reason} -> {:reply, reason, state}
+  def bind_step_reset(conn, stmt, args \\ []) do
+    if args != [] do
+      :ok = Sqlite3.bind(stmt, args)
     end
+
+    ret = Sqlite3.step(conn, stmt)
+    :ok = Sqlite3.reset(stmt)
+    ret
+  end
+
+  @impl true
+  def handle_call(%{"content" => content, "email" => email}, _from, state) do
+    {:ok, state, begin} = CachedConn.prepare(state, "BEGIN IMMEDIATE TRANSACTION")
+    :done = bind_step_reset(state.conn, begin)
+
+    {:ok, state, insert_user} = CachedConn.prepare(state, @insert_user)
+    :done = bind_step_reset(state.conn, insert_user, [email])
+
+    {:ok, state, insert_post} = CachedConn.prepare(state, @insert_post)
+
+    {:row, [id, user_id, content, created_at, updated_at]} =
+      bind_step_reset(state.conn, insert_post, [content, email])
+
+    {:ok, state, commit} = CachedConn.prepare(state, "COMMIT")
+    :done = bind_step_reset(state.conn, commit)
+
+    {:reply,
+     %{
+       id: id,
+       user_id: user_id,
+       content: content,
+       created_at: created_at,
+       updated_at: updated_at
+     }, state}
   end
 
   @impl true
   @spec terminate(Sqlite3.reason(), Sqlite3.db()) ::
           :ok | {:error, Sqlite3.reason()}
   def terminate(_reason, state) do
+    IO.puts("Closing db")
+
     with :ok <- Sqlite3.execute(state, "PRAGMA optimize"),
          :ok <- Sqlite3.close(state) do
       :ok
@@ -156,9 +158,11 @@ defmodule HttpPost do
 
   @spec on_valid(Plug.Conn.t(), data :: new_post()) :: Plug.Conn.t()
   defp on_valid(conn, data) do
+    post = GenServer.call(DbWriter, data)
+
     conn
     |> put_resp_header("content-type", "application/json")
-    |> send_resp(200, :json.encode(data))
+    |> send_resp(201, :json.encode(post))
   end
 
   @spec http_post(Plug.Conn.t()) :: Plug.Conn.t()
@@ -213,7 +217,8 @@ defmodule ElixirBandit.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {Bandit, plug: Router, ip: {:local, "/tmp/benchmark.sock"}, port: 0}
+      {Bandit, plug: Router, ip: {:local, "/tmp/benchmark.sock"}, port: 0},
+      {DbWriter, "../db/db.sqlite"}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

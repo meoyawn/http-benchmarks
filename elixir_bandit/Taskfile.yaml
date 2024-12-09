@@ -20,5 +20,5 @@ tasks:
     deps:
       - build
     cmds:
-      - rm /tmp/benchmark.sock
+      - rm -rf /tmp/benchmark.sock
       - "{{.BINARY}} start"
