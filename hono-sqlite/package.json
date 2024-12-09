@@ -1,7 +1,7 @@
 {
   "type": "module",
   "dependencies": {
-    "hono": "^4.6.12",
+    "hono": "^4.6.13",
     "valibot": "^1.0.0-beta.9"
   },
   "devDependencies": {
