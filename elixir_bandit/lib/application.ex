@@ -87,6 +87,8 @@ defmodule DbWriter do
   end
 
   @impl true
+  @spec handle_call(request :: HttpPost.new_post(), from :: pid(), state :: CachedConn.t()) ::
+          {:reply, HttpPost.post(), CachedConn.t()}
   def handle_call(%{"content" => content, "email" => email}, _from, state) do
     {:ok, state, begin} = CachedConn.prepare(state, "BEGIN IMMEDIATE TRANSACTION")
     :done = bind_step_reset(state.conn, begin)
@@ -143,6 +145,13 @@ defmodule HttpPost do
     ]
   }
 
+  # in reality keys are strings, not atoms
+  @typedoc """
+  %{
+    "email" => String.t(),
+    "content" => String.t()
+  }
+  """
   @type new_post() :: %{
           email: String.t(),
           content: String.t()
