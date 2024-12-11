@@ -8,10 +8,12 @@ import * as v from "valibot"
 const db = new Database("../db/db.sqlite")
 
 db.exec(`
-PRAGMA journal_mode = wal;
-PRAGMA synchronous = normal;
-PRAGMA foreign_keys = on;
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
 PRAGMA busy_timeout = 10000;
+
+PRAGMA strict = ON;
 
 PRAGMA optimize = 0x10002;
 `)
