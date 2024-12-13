@@ -13,14 +13,15 @@ Apple M1 Pro, running everything on the same machine
 oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
 ```
 
-| Framework      | RPS | p50 latency |
-| -------------- | --- | ----------- |
-| Rust Actix-Web | 51K | 0.9ms       |
-| Zig http.zig   | 43K | 1ms         |
-| Go FastHTTP    | 43K | 1.1ms       |
-| Kotlin Vert.x  | 33K | 1.4ms       |
-| Bun Hono       | 21K | 1.9ms       |
-| Elixir Bandit  | 10K | 4.9ms       |
+| Framework         | RPS | p50 latency |
+| ----------------- | --- | ----------- |
+| Rust Actix-Web    | 51K | 0.9ms       |
+| Zig http.zig      | 43K | 1ms         |
+| Go FastHTTP       | 43K | 1.1ms       |
+| Kotlin Vert.x     | 33K | 1.4ms       |
+| Bun Hono          | 21K | 1.9ms       |
+| Python Blacksheep | 19K | 2.5ms       |
+| Elixir Bandit     | 10K | 4.9ms       |
 
 ## Won't do
 
@@ -34,11 +35,12 @@ HTTP POST JSON echo
 oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "foo@gmail.com" }'
 ```
 
-| Framework      | RPS  | p50 latency |
-| -------------- | ---- | ----------- |
-| Rust Actix-Web | 266K | 0.2ms       |
-| Zig http.zig   | 264K | 0.2ms       |
-| Kotlin Vert.x  | 204K | 0.2ms       |
-| Go FastHTTP    | 199K | 0.2ms       |
-| Bun Hono       | 156K | 0.3ms       |
-| Elixir Bandit  | 139K | 0.3ms       |
+| Framework         | RPS  | p50 latency |
+| ----------------- | ---- | ----------- |
+| Rust Actix-Web    | 266K | 0.2ms       |
+| Zig http.zig      | 264K | 0.2ms       |
+| Kotlin Vert.x     | 204K | 0.2ms       |
+| Go FastHTTP       | 199K | 0.2ms       |
+| Python Blacksheep | 178K | 0.3ms       |
+| Bun Hono          | 156K | 0.3ms       |
+| Elixir Bandit     | 139K | 0.3ms       |
