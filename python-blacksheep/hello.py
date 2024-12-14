@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from dataclasses import dataclass
 
@@ -24,10 +25,21 @@ PRAGMA optimize = 0x10002;
 router = Router()
 
 
-@dataclass
+@dataclass()
 class NewPost:
     email: str
     content: str
+
+    def validate(self) -> list[str]:
+        errs = []
+
+        if len(self.content) == 0:
+            errs.append("content: should not be empty")
+
+        if not re.match(r"^[^@]+@[^@]+\.[^@]{2,}$", self.email):
+            errs.append("email: should be a valid email address")
+
+        return errs
 
 
 @dataclass
@@ -41,13 +53,17 @@ class Post:
 
 @router.post("/posts")
 def http_post(req: FromJSON[NewPost]) -> Response:
+    body = req.value
+
+    errs = body.validate()
+    if len(errs) > 0:
+        return json({"errors": errs}, status=400)
+
     post: Post | None = None
 
     conn.execute("BEGIN IMMEDIATE TRANSACTION")
     try:
-        conn.execute(
-            "INSERT OR IGNORE INTO users (email) VALUES (?)", (req.value.email,)
-        )
+        conn.execute("INSERT OR IGNORE INTO users (email) VALUES (?)", (body.email,))
         res = conn.execute(
             """
             INSERT INTO posts   (content,   user_id)
@@ -57,8 +73,8 @@ def http_post(req: FromJSON[NewPost]) -> Response:
             RETURNING   id, user_id, content, created_at, updated_at
             """,
             (
-                req.value.content,
-                req.value.email,
+                body.content,
+                body.email,
             ),
         )
         post = Post(*res.fetchone())
