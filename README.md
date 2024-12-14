@@ -41,6 +41,6 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 | Zig http.zig      | 264K | 0.2ms       |
 | Kotlin Vert.x     | 204K | 0.2ms       |
 | Go FastHTTP       | 199K | 0.2ms       |
-| Python Blacksheep | 178K | 0.3ms       |
+| Python Blacksheep | 192K | 0.2ms       |
 | Bun Hono          | 156K | 0.3ms       |
 | Elixir Bandit     | 139K | 0.3ms       |

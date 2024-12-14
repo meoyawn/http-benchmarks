@@ -1,8 +1,8 @@
 version: 3
 
 tasks:
-  pypy:
-    - uv run --python pypy@3.10 uvicorn hello:app --uds /tmp/benchmark.sock --workers 9 --ws none --no-access-log --no-proxy-headers --no-server-header --no-date-header
-
   start:
     - uv run uvicorn hello:app --uds /tmp/benchmark.sock --ws none --no-access-log --no-proxy-headers --no-server-header --no-date-header
+
+  workers:
+    - uv run uvicorn hello:app --uds /tmp/benchmark.sock --workers 10 --ws none --no-access-log --no-proxy-headers --no-server-header --no-date-header
