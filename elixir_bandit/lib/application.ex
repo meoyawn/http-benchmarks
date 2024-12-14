@@ -4,36 +4,27 @@ defmodule CachedConn do
 
   @type t :: %__MODULE__{
           conn: Exqlite.Sqlite3.db(),
-          cache: %{String.t() => Exqlite.Sqlite3.statement()}
+          cache: :ets.table()
         }
 
   alias Exqlite.Sqlite3
 
-  @spec prepare(t(), String.t()) ::
-          {:ok, t(), Sqlite3.statement()} | {:error, Sqlite3.reason()}
+  @spec prepare(t(), String.t()) :: {:error, Sqlite3.reason()} | {:ok, Sqlite3.statement()}
   def prepare(cc, sql) do
-    case Map.get(cc.cache, sql) do
-      nil ->
+    case :ets.lookup(cc.cache, sql) do
+      [] ->
         case Sqlite3.prepare(cc.conn, sql) do
           {:ok, stmt} ->
-            {:ok, %{cc | cache: Map.put(cc.cache, sql, stmt)}, stmt}
+            :ets.insert(cc.cache, {sql, stmt})
+            {:ok, stmt}
 
           {:error, reason} ->
             {:error, reason}
         end
 
-      stmt ->
-        {:ok, cc, stmt}
+      [{_sql, stmt}] ->
+        {:ok, stmt}
     end
-  end
-
-  def immediate(cc, func) do
-    {:ok, state, begin} = prepare(cc, "BEGIN IMMEDIATE TRANSACTION")
-    :done = Sqlite3.step(state.conn, begin)
-    {:ok, state, result} = func.(state)
-    {:ok, state, commit} = prepare(state, "COMMIT")
-    :done = Sqlite3.step(state.conn, commit)
-    {:ok, state, result}
   end
 end
 
@@ -48,19 +39,12 @@ defmodule DbWriter do
   PRAGMA foreign_keys = on;
   PRAGMA busy_timeout = 10000;
 
+  PRAGMA strict = ON;
+
   PRAGMA optimize = 0x10002;
   """
 
-  @insert_user "INSERT OR IGNORE INTO users (email) VALUES (?)"
-
-  @insert_post """
-  INSERT INTO posts   (content,   user_id)
-  SELECT              ?,          id
-  FROM        users
-  WHERE       email = ?
-  RETURNING   id, user_id, content, created_at, updated_at
-  """
-
+  @spec start_link(String.t()) :: :ignore | {:error, any()} | {:ok, pid()}
   def start_link(path) do
     GenServer.start_link(__MODULE__, path, name: __MODULE__)
   end
@@ -70,13 +54,14 @@ defmodule DbWriter do
   def init(path) do
     with {:ok, conn} <- Sqlite3.open(path, mode: [:readwrite, :nomutex]),
          :ok <- Sqlite3.execute(conn, @open_pragmas) do
-      {:ok, %CachedConn{conn: conn, cache: %{}}}
+      cache = :ets.new(:db_cache, [:set, :private])
+      {:ok, %CachedConn{conn: conn, cache: cache}}
     else
       {:error, reason} -> {:stop, reason}
     end
   end
 
-  def bind_step_reset(conn, stmt, args \\ []) do
+  def execute(conn, stmt, args \\ []) do
     if args != [] do
       :ok = Sqlite3.bind(stmt, args)
     end
@@ -86,23 +71,37 @@ defmodule DbWriter do
     ret
   end
 
+  def prepared(state, sql, args \\ []) do
+    {:ok, stmt} = CachedConn.prepare(state, sql)
+    execute(state.conn, stmt, args)
+  end
+
   @impl true
-  @spec handle_call(request :: HttpPost.new_post(), from :: pid(), state :: CachedConn.t()) ::
+  @spec handle_call(
+          request :: HttpPost.new_post(),
+          from :: GenServer.from(),
+          state :: CachedConn.t()
+        ) ::
           {:reply, HttpPost.post(), CachedConn.t()}
   def handle_call(%{"content" => content, "email" => email}, _from, state) do
-    {:ok, state, begin} = CachedConn.prepare(state, "BEGIN IMMEDIATE TRANSACTION")
-    :done = bind_step_reset(state.conn, begin)
+    :done = prepared(state, "BEGIN IMMEDIATE TRANSACTION")
 
-    {:ok, state, insert_user} = CachedConn.prepare(state, @insert_user)
-    :done = bind_step_reset(state.conn, insert_user, [email])
-
-    {:ok, state, insert_post} = CachedConn.prepare(state, @insert_post)
+    :done = prepared(state, "INSERT OR IGNORE INTO users (email) VALUES (?)", [email])
 
     {:row, [id, user_id, content, created_at, updated_at]} =
-      bind_step_reset(state.conn, insert_post, [content, email])
+      prepared(
+        state,
+        """
+        INSERT INTO posts   (content,   user_id)
+        SELECT              ?,          id
+        FROM        users
+        WHERE       email = ?
+        RETURNING   id, user_id, content, created_at, updated_at
+        """,
+        [content, email]
+      )
 
-    {:ok, state, commit} = CachedConn.prepare(state, "COMMIT")
-    :done = bind_step_reset(state.conn, commit)
+    :done = prepared(state, "COMMIT")
 
     {:reply,
      %{
