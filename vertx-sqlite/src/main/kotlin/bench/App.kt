@@ -59,6 +59,12 @@ private data class ReqRes<T, R>(
     val res: Channel<R>
 )
 
+private suspend fun <T, R> SendChannel<ReqRes<T, R>>.call(req: T): R {
+    val res = Channel<R>()
+    send(ReqRes(req, res))
+    return res.receive()
+}
+
 private suspend fun httpPost(chan: SendChannel<ReqRes<NewPost, Post>>, ctx: RoutingContext) {
     val body = ctx.body().asPojo(NewPost::class.java) ?: throw HttpException(400)
 
@@ -69,9 +75,7 @@ private suspend fun httpPost(chan: SendChannel<ReqRes<NewPost, Post>>, ctx: Rout
         return
     }
 
-    val res = Channel<Post>()
-    chan.send(ReqRes(body, res))
-    val post = res.receive()
+    val post = chan.call(body)
 
     ctx.response().statusCode = 201
     ctx.json(post)
@@ -84,7 +88,7 @@ private class CachingConn(val conn: Connection) : AutoCloseable {
     fun prepared(sql: String): PreparedStatement =
         cache.getOrPut(sql) { conn.prepareStatement(sql) }
 
-    inline fun <T> immediate(fn: CachingConn.() -> T): T {
+    inline fun <T> immediateTX(fn: CachingConn.() -> T): T {
         conn.autoCommit = false
 
         return try {
@@ -128,7 +132,8 @@ class App : CoroutineVerticle() {
             })
 
             for ((req, res) in chan) {
-                val post = conn.immediate {
+
+                val post = conn.immediateTX {
                     prepared("INSERT OR IGNORE INTO users (email) VALUES (?)").run {
                         setString(1, req.email)
                         executeUpdate()
