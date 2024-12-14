@@ -13,6 +13,7 @@ import io.vertx.kotlin.coroutines.coAwait
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
 import java.sql.Connection
@@ -111,61 +112,71 @@ private class CachingConn(val conn: Connection) : AutoCloseable {
     }
 }
 
+private fun CachingConn.insertUser(email: String) =
+    prepared("INSERT OR IGNORE INTO users (email) VALUES (?)").run {
+        setString(1, email)
+        executeUpdate()
+    }
+
+private fun CachingConn.insertPost(req: NewPost): Post =
+    prepared(
+        """
+        INSERT INTO posts   (content,   user_id)
+        SELECT              ?,          id
+        FROM        users
+        WHERE       email = ?
+        RETURNING   id, user_id, content, created_at, updated_at
+        """
+    ).run {
+        setString(1, req.content)
+        setString(2, req.email)
+
+        executeQuery().use {
+            check(it.next())
+
+            Post(
+                id = it.getLong(1),
+                user_id = it.getLong(2),
+                content = it.getString(3),
+                created_at = it.getLong(4),
+                updated_at = it.getLong(5),
+            )
+        }
+    }
+
+private suspend fun dbWriter(chan: ReceiveChannel<Call<NewPost, Post>>) {
+
+    val conn = CachingConn(SQLite.DATA_SOURCE.connection.apply {
+        createStatement().use {
+            it.execute("PRAGMA strict = ON;")
+            it.execute("PRAGMA optimize = 0x10002;")
+        }
+    })
+
+    for ((req, res) in chan) {
+        val post = conn.immediateTX {
+            insertUser(req.email)
+            insertPost(req)
+        }
+
+        res.send(post)
+    }
+
+    conn.close()
+}
+
 class App : CoroutineVerticle() {
 
     private companion object {
         val logger = LoggerFactory.getLogger(App::class.java)!!
     }
 
-    private val chan = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
+    private val dbChan = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
 
     override suspend fun start() {
 
         launch(Executors.newSingleThreadExecutor().asCoroutineDispatcher()) {
-
-            val conn = CachingConn(SQLite.DATA_SOURCE.connection.apply {
-                createStatement().use {
-                    it.execute("PRAGMA strict = ON;")
-                    it.execute("PRAGMA optimize = 0x10002;")
-                }
-            })
-
-            for ((req, res) in chan) {
-                val post = conn.immediateTX {
-                    prepared("INSERT OR IGNORE INTO users (email) VALUES (?)").run {
-                        setString(1, req.email)
-                        executeUpdate()
-                    }
-
-                    prepared(
-                        """
-                        INSERT INTO posts   (content,   user_id)
-                        SELECT              ?,          id
-                        FROM        users
-                        WHERE       email = ?
-                        RETURNING   id, user_id, content, created_at, updated_at
-                        """
-                    ).run {
-                        setString(1, req.content)
-                        setString(2, req.email)
-                        executeQuery().use {
-                            check(it.next())
-
-                            Post(
-                                id = it.getLong(1),
-                                user_id = it.getLong(2),
-                                content = it.getString(3),
-                                created_at = it.getLong(4),
-                                updated_at = it.getLong(5),
-                            )
-                        }
-                    }
-                }
-
-                res.send(post)
-            }
-
-            conn.close()
+            dbWriter(dbChan)
         }
 
         val router = Router.router(vertx).apply {
@@ -177,29 +188,22 @@ class App : CoroutineVerticle() {
             }
 
             post("/posts").coHandler(scope = this@App) {
-                httpPost(chan, it)
+                httpPost(dbChan, it)
             }
         }
 
-        val host = config.getString("http.host", "localhost")
-        val port = config.getInteger("http.port", 8080)
-        val domainSocket = config.getString("http.socket", "")
+        val uds = config.getString("http.socket", "/tmp/benchmark.sock")
 
         vertx.createHttpServer()
             .requestHandler(router)
-            .listen(
-                if (domainSocket.isNullOrBlank()) SocketAddress.inetSocketAddress(port, host)
-                else SocketAddress.domainSocketAddress(domainSocket)
-            )
+            .listen(SocketAddress.domainSocketAddress(uds))
             .coAwait()
 
-        logger.info(
-            if (domainSocket.isNullOrBlank()) "http://$host:$port"
-            else domainSocket
-        )
+        logger.info(uds)
     }
 
     override suspend fun stop() {
-        chan.close()
+        // closes database
+        dbChan.close()
     }
 }
