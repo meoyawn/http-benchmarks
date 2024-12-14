@@ -11,6 +11,7 @@ object SQLite {
     private const val URL = "jdbc:sqlite:$DB_PATH"
 
     val DATA_SOURCE = SQLiteDataSource(SQLiteConfig().apply {
+        setReadOnly(false)
         transactionMode = SQLiteConfig.TransactionMode.IMMEDIATE
         busyTimeout = 10.seconds.inWholeMilliseconds.toInt()
         setSynchronous(SQLiteConfig.SynchronousMode.NORMAL)

@@ -11,13 +11,19 @@ import io.vertx.json.schema.common.RegularExpressions
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
+import java.sql.Connection
+import java.sql.PreparedStatement
+import java.util.concurrent.Executors
 
-private inline fun Route.coHandle(scope: CoroutineScope, crossinline f: suspend (ctx: RoutingContext) -> Unit) =
+private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspend (ctx: RoutingContext) -> Unit) =
     handler { ctx ->
         scope.launch {
             try {
-                f(ctx)
+                fn(ctx)
             } catch (e: Exception) {
                 ctx.fail(500, e)
             }
@@ -29,15 +35,33 @@ private data class NewPost(
     val content: String,
 )
 
+private data class Post(
+    val id: Long,
+    val user_id: Long,
+    val content: String,
+    val created_at: Long,
+    val updated_at: Long,
+)
+
 private fun NewPost.validate(): List<String> {
-    val errors = ArrayList<String>(2)
-    if (content.isEmpty()) errors.add("content: must not be empty")
-    if (!RegularExpressions.EMAIL.matcher(email).matches()) errors.add("email: invalid: $email")
-    return errors
+    val errs = ArrayList<String>(2)
+    if (content.isEmpty()) {
+        errs.add("content: must not be empty")
+    }
+    if (!RegularExpressions.EMAIL.matcher(email).matches()) {
+        errs.add("email: invalid: $email")
+    }
+    return errs
 }
 
-private suspend fun httpPost(db: Db, ctx: RoutingContext) {
+private data class ReqRes<T, R>(
+    val req: T,
+    val res: Channel<R>
+)
+
+private suspend fun httpPost(chan: SendChannel<ReqRes<NewPost, Post>>, ctx: RoutingContext) {
     val body = ctx.body().asPojo(NewPost::class.java) ?: throw HttpException(400)
+
     val errs = body.validate()
     if (errs.isNotEmpty()) {
         ctx.response().statusCode = 400
@@ -45,22 +69,101 @@ private suspend fun httpPost(db: Db, ctx: RoutingContext) {
         return
     }
 
-    val post = db.tx {
-        insertUser(body.email)
-        insertPost(email = body.email, content = body.content)
-    }
+    val res = Channel<Post>()
+    chan.send(ReqRes(body, res))
+    val post = res.receive()
 
     ctx.response().statusCode = 201
     ctx.json(post)
 }
 
-class App(private val db: Db) : CoroutineVerticle() {
+private class CachingConn(val conn: Connection) : AutoCloseable {
+
+    private val cache = HashMap<String, PreparedStatement>()
+
+    fun prepared(sql: String): PreparedStatement =
+        cache.getOrPut(sql) { conn.prepareStatement(sql) }
+
+    inline fun <T> immediate(fn: CachingConn.() -> T): T {
+        conn.autoCommit = false
+
+        return try {
+            fn().also {
+                conn.commit()
+            }
+        } catch (e: Exception) {
+            conn.rollback()
+            throw e
+        }
+    }
+
+    override fun close() {
+        for ((_, stmt) in cache) {
+            stmt.close()
+        }
+        cache.clear()
+
+        conn.createStatement().use { it.execute("PRAGMA optimize;") }
+        conn.close()
+    }
+}
+
+class App : CoroutineVerticle() {
 
     private companion object {
         val logger = LoggerFactory.getLogger(App::class.java)!!
     }
 
+    private val chan = Channel<ReqRes<NewPost, Post>>(Channel.BUFFERED)
+
     override suspend fun start() {
+
+        launch(Executors.newSingleThreadExecutor().asCoroutineDispatcher()) {
+
+            val conn = CachingConn(SQLite.DATA_SOURCE.connection.apply {
+                createStatement().use {
+                    it.execute("PRAGMA strict = ON;")
+                    it.execute("PRAGMA optimize = 0x10002;")
+                }
+            })
+
+            for ((req, res) in chan) {
+                val post = conn.immediate {
+                    prepared("INSERT OR IGNORE INTO users (email) VALUES (?)").run {
+                        setString(1, req.email)
+                        executeUpdate()
+                    }
+
+                    prepared(
+                        """
+                        INSERT INTO posts   (content,   user_id)
+                        SELECT              ?,          id
+                        FROM        users
+                        WHERE       email = ?
+                        RETURNING   id, user_id, content, created_at, updated_at
+                        """
+                    ).run {
+                        setString(1, req.content)
+                        setString(2, req.email)
+                        executeQuery().use {
+                            check(it.next())
+
+                            Post(
+                                id = it.getLong(1),
+                                user_id = it.getLong(2),
+                                content = it.getString(3),
+                                created_at = it.getLong(4),
+                                updated_at = it.getLong(5),
+                            )
+                        }
+                    }
+                }
+
+                res.send(post)
+            }
+
+            conn.close()
+        }
 
         val router = Router.router(vertx).apply {
             route().handler(BodyHandler.create(false))
@@ -70,8 +173,8 @@ class App(private val db: Db) : CoroutineVerticle() {
                 it.json(body)
             }
 
-            post("/posts").coHandle(scope = this@App) {
-                httpPost(db, it)
+            post("/posts").coHandler(scope = this@App) {
+                httpPost(chan, it)
             }
         }
 
@@ -91,5 +194,9 @@ class App(private val db: Db) : CoroutineVerticle() {
             if (domainSocket.isNullOrBlank()) "http://$host:$port"
             else domainSocket
         )
+    }
+
+    override suspend fun stop() {
+        chan.close()
     }
 }

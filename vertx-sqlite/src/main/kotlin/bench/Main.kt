@@ -3,15 +3,11 @@ package bench
 import io.vertx.config.ConfigRetriever
 import io.vertx.config.ConfigRetrieverOptions
 import io.vertx.core.DeploymentOptions
-import io.vertx.core.ThreadingModel
 import io.vertx.core.Vertx
 import io.vertx.core.VertxOptions
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.kotlin.coroutines.coAwait
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import java.util.concurrent.Executors
 
 object Main {
 
@@ -27,12 +23,8 @@ object Main {
 
         val config = retriever.config.coAwait()
 
-        val writerThread = Executors.newSingleThreadExecutor { Thread(it, "DB writer") }.asCoroutineDispatcher()
-
-        val db = withContext(writerThread) { Db.create(writerThread) }
-
         val id = vertx.deployVerticle(
-            { App(db) },
+            App(),
             DeploymentOptions()
                 .setConfig(config)
         ).coAwait()
@@ -41,13 +33,7 @@ object Main {
             runBlocking {
                 vertx.undeploy(id).coAwait()
                 vertx.close().coAwait()
-
-                withContext(writerThread) {
-                    db.close()
-                }
             }
-
-            writerThread.close()
         })
     }
 }
