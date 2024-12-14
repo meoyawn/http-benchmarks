@@ -54,18 +54,18 @@ private fun NewPost.validate(): List<String> {
     return errs
 }
 
-private data class ReqRes<T, R>(
+private data class Call<T, R>(
     val req: T,
-    val res: Channel<R>
+    val res: SendChannel<R>,
 )
 
-private suspend fun <T, R> SendChannel<ReqRes<T, R>>.call(req: T): R {
+private suspend fun <T, R> SendChannel<Call<T, R>>.call(req: T): R {
     val res = Channel<R>()
-    send(ReqRes(req, res))
+    send(Call(req, res))
     return res.receive()
 }
 
-private suspend fun httpPost(chan: SendChannel<ReqRes<NewPost, Post>>, ctx: RoutingContext) {
+private suspend fun httpPost(db: SendChannel<Call<NewPost, Post>>, ctx: RoutingContext) {
     val body = ctx.body().asPojo(NewPost::class.java) ?: throw HttpException(400)
 
     val errs = body.validate()
@@ -75,8 +75,7 @@ private suspend fun httpPost(chan: SendChannel<ReqRes<NewPost, Post>>, ctx: Rout
         return
     }
 
-    val post = chan.call(body)
-
+    val post = db.call(body)
     ctx.response().statusCode = 201
     ctx.json(post)
 }
@@ -118,7 +117,7 @@ class App : CoroutineVerticle() {
         val logger = LoggerFactory.getLogger(App::class.java)!!
     }
 
-    private val chan = Channel<ReqRes<NewPost, Post>>(Channel.BUFFERED)
+    private val chan = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
 
     override suspend fun start() {
 
@@ -132,7 +131,6 @@ class App : CoroutineVerticle() {
             })
 
             for ((req, res) in chan) {
-
                 val post = conn.immediateTX {
                     prepared("INSERT OR IGNORE INTO users (email) VALUES (?)").run {
                         setString(1, req.email)

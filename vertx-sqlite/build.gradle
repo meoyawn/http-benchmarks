@@ -60,7 +60,17 @@ test {
 }
 
 kotlin {
+    // jvmToolchain(23)
 
+    compilerOptions {
+        // jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_23
+
+        freeCompilerArgs.addAll(
+            "-Xno-call-assertions",
+            "-Xno-param-assertions",
+            "-Xno-receiver-assertions",
+        )
+    }
 }
 
 shadowJar {

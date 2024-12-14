@@ -18,7 +18,7 @@ oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m 
 | Rust Actix-Web    | 51K | 0.9ms       |
 | Zig http.zig      | 43K | 1ms         |
 | Go FastHTTP       | 43K | 1.1ms       |
-| Kotlin Vert.x     | 38K | 1.2ms       |
+| Kotlin Vert.x     | 39K | 1.2ms       |
 | Bun Hono          | 21K | 1.9ms       |
 | Python Blacksheep | 19K | 2.5ms       |
 | Elixir Bandit     | 10K | 4.9ms       |
