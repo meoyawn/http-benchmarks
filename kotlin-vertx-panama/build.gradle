@@ -1,0 +1,52 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '2.1.0'
+    id 'application'
+    id "com.github.johnrengelman.shadow" version "8.1.1"
+    id "com.github.ben-manes.versions" version "0.51.0"
+    id "idea"
+}
+
+group = 'bench'
+version = '1.0-SNAPSHOT'
+
+sourceSets {
+    main {
+        java.srcDirs += file("gen/main/java/")
+    }
+}
+
+idea {
+    module {
+        generatedSourceDirs += file("gen/main/java/")
+    }
+}
+
+application {
+    mainClass = "bench.Main"
+    applicationDefaultJvmArgs.addAll(
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djava.library.path=./sqlite3"
+    )
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.jetbrains.kotlin:kotlin-test'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.addAll(
+            "-Xno-call-assertions",
+            "-Xno-param-assertions",
+            "-Xno-receiver-assertions",
+        )
+    }
+}

@@ -1,0 +1,19 @@
+version: 3
+
+tasks:
+  build:
+    cmd: >
+      clang main.c -o main
+      -I/opt/homebrew/opt/sqlite/include
+      -L/opt/homebrew/opt/sqlite/lib
+      -lsqlite3
+    sources:
+      - Taskfile.yaml
+      - "*.c"
+    generates:
+      - main
+
+  dev:
+    deps:
+      - build
+    cmd: ./main
