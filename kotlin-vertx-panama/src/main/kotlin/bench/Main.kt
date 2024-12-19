@@ -1,6 +1,7 @@
 package bench
 
 import org.sqlite.sqlite3_h.SQLITE_OPEN_READWRITE
+import sqlite.SQLite3Conn
 import java.lang.foreign.Arena
 import java.nio.file.Path
 

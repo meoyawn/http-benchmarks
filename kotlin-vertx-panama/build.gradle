@@ -34,6 +34,35 @@ repositories {
 }
 
 dependencies {
+    implementation(
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0",
+    )
+
+    implementation(
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.0",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.10.0",
+    )
+
+    implementation(
+        platform("com.fasterxml.jackson:jackson-bom:2.18.2"),
+        "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", // java time
+        "com.fasterxml.jackson.module:jackson-module-kotlin",
+    )
+
+    implementation(
+        platform("io.vertx:vertx-dependencies:4.5.11"),
+        "io.vertx:vertx-config",
+        "io.vertx:vertx-lang-kotlin-coroutines",
+        "io.vertx:vertx-web",
+        "io.vertx:vertx-json-schema",
+    )
+    if (System.getProperty('os.name') == 'Mac OS X' && System.getProperty('os.arch') == 'aarch64') {
+        implementation(
+            'io.netty:netty-resolver-dns-native-macos:4.1.116.Final:osx-aarch_64',
+            'io.netty:netty-transport-native-kqueue:4.1.116.Final:osx-aarch_64',
+        )
+    }
+
     testImplementation 'org.jetbrains.kotlin:kotlin-test'
 }
 
@@ -48,5 +77,28 @@ kotlin {
             "-Xno-param-assertions",
             "-Xno-receiver-assertions",
         )
+    }
+}
+
+shadowJar {
+    mergeServiceFiles()
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+dependencyUpdates {
+    checkConstraints = true
+
+    rejectVersionIf {
+        final version = it.candidate.version.toLowerCase()
+
+        [
+            "m", // milestone
+            "alpha",
+            "beta",
+            "eap",
+            "rc",
+            "cr",
+        ].any { version.contains(it) }
     }
 }

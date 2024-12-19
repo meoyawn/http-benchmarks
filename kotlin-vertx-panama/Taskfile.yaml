@@ -4,17 +4,17 @@ tasks:
   jextract:
     vars:
       BINARY: /Users/adelnizamutdinov/downloads/jextract-22/bin/jextract
-      OUT_DIR: gen/main/java
+      SQLITE3_DIR: /opt/homebrew/opt/sqlite3/
+      OUT_DIR: gen/main/java/
     cmd: >
-      {{.BINARY}} /opt/homebrew/opt/sqlite3/include/sqlite3.h
-      -I /opt/homebrew/opt/sqlite3/include/
-      -l :/opt/homebrew/opt/sqlite3/lib/libsqlite3.dylib
+      {{.BINARY}} {{.SQLITE3_DIR}}include/sqlite3.h
+      -l :{{.SQLITE3_DIR}}lib/libsqlite3.dylib
       --target-package org.sqlite
       --output {{.OUT_DIR}}
     sources:
       - Taskfile.yaml
     generates:
-      - "{{.OUT_DIR}}/**/*"
+      - "{{.OUT_DIR}}**/*"
 
   dev:
     deps:
