@@ -13,15 +13,16 @@ Apple M1 Pro, running everything on the same machine
 oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
 ```
 
-| Framework         | RPS | p50 latency |
-| ----------------- | --- | ----------- |
-| Rust Actix-Web    | 51K | 0.9ms       |
-| Zig http.zig      | 43K | 1ms         |
-| Go FastHTTP       | 43K | 1.1ms       |
-| Kotlin Vert.x     | 40K | 1.1ms       |
-| Bun Hono          | 21K | 1.9ms       |
-| Python Blacksheep | 19K | 2.5ms       |
-| Elixir Bandit     | 10K | 4.9ms       |
+| Framework                   | RPS | p50 latency |
+| --------------------------- | --- | ----------- |
+| Kotlin Vert.x SQLite Panama | 52K | 0.9ms       |
+| Rust Actix-Web              | 51K | 0.9ms       |
+| Zig http.zig                | 43K | 1ms         |
+| Go FastHTTP                 | 43K | 1.1ms       |
+| Kotlin Vert.x               | 40K | 1.1ms       |
+| Bun Hono                    | 21K | 1.9ms       |
+| Python Blacksheep           | 19K | 2.5ms       |
+| Elixir Bandit               | 10K | 4.9ms       |
 
 ## Won't do
 

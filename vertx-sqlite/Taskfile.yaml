@@ -2,7 +2,6 @@ version: 3
 
 vars:
   JAR: build/libs/vertx-sqlite-1.0-all.jar
-  LOCAL_PORT: 8080
   UNIX_SOCKET: /tmp/benchmark.sock
 
 tasks:

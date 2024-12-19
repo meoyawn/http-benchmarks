@@ -1,5 +1,9 @@
 version: 3
 
+vars:
+  JAR: build/libs/kotlin-vertx-panama-1.0-all.jar
+  UNIX_SOCKET: /tmp/benchmark.sock
+
 tasks:
   jextract:
     vars:
@@ -20,3 +24,20 @@ tasks:
     deps:
       - jextract
     cmd: ./gradlew run
+
+  build:
+    deps:
+      - jextract
+    cmd: ./gradlew sJ
+    sources:
+      - src/**/*
+      - gen/**/*
+      - gradle/**/*
+      - "*gradle*"
+    generates:
+      - "{{.JAR}}"
+
+  start:
+    deps:
+      - build
+    cmd: java -server -XX:+PerfDisableSharedMem --enable-native-access=ALL-UNNAMED -jar {{.JAR}} -Dhttp.socket={{.UNIX_SOCKET}}

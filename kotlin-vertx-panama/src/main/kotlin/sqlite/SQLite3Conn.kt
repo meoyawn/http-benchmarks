@@ -90,7 +90,7 @@ class Statement(
         }
     }
 
-    fun exec(args: Array<Any?>): Unit =
+    fun exec(args: Array<Any?> = emptyArray()): Unit =
         bindReset(args) {
             when (sqlite3_step(stmt)) {
                 SQLITE_ROW(), SQLITE_DONE() -> {}
@@ -140,6 +140,8 @@ private inline fun Arena.ptrPtr(fn: (MemorySegment) -> Unit): MemorySegment {
 
 class SQLite3Conn(private val arena: Arena, private val conn: MemorySegment) : AutoCloseable {
 
+    private val cache = HashMap<String, Statement>()
+
     companion object {
         fun open(arena: Arena, path: Path, flags: Int): SQLite3Conn {
             val conn = arena.ptrPtr {
@@ -184,7 +186,34 @@ class SQLite3Conn(private val arena: Arena, private val conn: MemorySegment) : A
         return Statement(arena = arena, conn = conn, stmt = stmt)
     }
 
-    override fun close(): Unit =
+    fun prepareCached(sql: String): Statement =
+        cache.getOrPut(sql) { prepare(sql) }
+
+    enum class TxMode {
+        IMMEDIATE,
+        DEFERRED,
+        EXCLUSIVE,
+    }
+
+    inline fun <T> transact(mode: TxMode, fn: SQLite3Conn.() -> T): T {
+        prepareCached("BEGIN $mode").exec()
+        return try {
+            fn(this).also {
+                prepareCached("COMMIT").exec()
+            }
+        } catch (e: Exception) {
+            prepareCached("ROLLBACK").exec()
+            throw e
+        }
+    }
+
+    override fun close() {
+        for (stmt in cache.values) {
+            stmt.close()
+        }
+        cache.clear()
+
         sqlite3_close(conn)
             .ok(conn)
+    }
 }

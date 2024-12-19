@@ -5,7 +5,10 @@ import { validator } from "hono/validator"
 import * as fs from "node:fs/promises"
 import * as v from "valibot"
 
-const db = new Database("../db/db.sqlite")
+const db = new Database("../db/db.sqlite", {
+  readwrite: true,
+  strict: true,
+})
 
 db.exec(`
 PRAGMA journal_mode = WAL;
