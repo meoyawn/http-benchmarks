@@ -99,6 +99,8 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
             } finally {
                 sqlite3_reset(stmt)
                     .ok(conn)
+//                sqlite3_clear_bindings(stmt)
+//                    .ok(conn)
             }
         }
     }
@@ -138,22 +140,22 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
      *
      * [Result values](https://www.sqlite.org/c3ref/column_blob.html)
      */
-    private fun requireCol(i: @Range(from = 0, to = 32768) Int): Int {
+    private fun colIndex(i: @Range(from = 0, to = 32768) Int): Int {
         require(i in 0..<columnCount) { "Column index $i must be in range ${0..<columnCount}" }
         return i
     }
 
     fun getLong(i: @Range(from = 0, to = 32768) Int): Long =
-        sqlite3_column_int64(stmt, requireCol(i))
+        sqlite3_column_int64(stmt, colIndex(i))
 
     fun getString(i: @Range(from = 0, to = 32768) Int): String =
-        sqlite3_column_text(stmt, requireCol(i)).getString(0)
+        sqlite3_column_text(stmt, colIndex(i)).getString(0)
 
     fun getDouble(i: @Range(from = 0, to = 32768) Int): Double =
-        sqlite3_column_double(stmt, requireCol(i))
+        sqlite3_column_double(stmt, colIndex(i))
 
     fun getInt(i: @Range(from = 0, to = 32768) Int): Int =
-        sqlite3_column_int(stmt, requireCol(i))
+        sqlite3_column_int(stmt, colIndex(i))
 
     fun getBool(i: @Range(from = 0, to = 32768) Int): Boolean =
         getInt(i) != 0
