@@ -16,7 +16,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
-import org.sqlite.sqlite3_h
 import sqlite.SQLite3Conn
 import java.lang.foreign.Arena
 import java.nio.file.Path
@@ -108,7 +107,7 @@ private fun SQLite3Conn.insertPost(req: NewPost): Post =
 
 private suspend fun dbWriter(chan: ReceiveChannel<Call<NewPost, Post>>) {
     Arena.ofConfined().use { arena ->
-        SQLite3Conn.open(arena, Path.of("../db/db.sqlite"), flags = sqlite3_h.SQLITE_OPEN_READWRITE()).use { conn ->
+        SQLite3Conn.open(arena, Path.of("../db/db.sqlite")).use { conn ->
             conn.exec(
                 """
                 PRAGMA journal_mode = WAL;
