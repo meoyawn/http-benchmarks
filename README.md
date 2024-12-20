@@ -40,7 +40,7 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 | ----------------- | ---- | ----------- |
 | Rust Actix-Web    | 266K | 0.2ms       |
 | Zig http.zig      | 264K | 0.2ms       |
-| Kotlin Vert.x     | 207K | 0.2ms       |
+| Kotlin Vert.x     | 242K | 0.2ms       |
 | Go FastHTTP       | 199K | 0.2ms       |
 | Python Blacksheep | 192K | 0.2ms       |
 | JS Bun Hono       | 156K | 0.3ms       |
