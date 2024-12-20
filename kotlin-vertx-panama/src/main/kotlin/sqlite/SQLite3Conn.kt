@@ -21,7 +21,6 @@ import org.sqlite.sqlite3_h.sqlite3_column_text
 import org.sqlite.sqlite3_h.sqlite3_errmsg
 import org.sqlite.sqlite3_h.sqlite3_exec
 import org.sqlite.sqlite3_h.sqlite3_finalize
-import org.sqlite.sqlite3_h.sqlite3_free
 import org.sqlite.sqlite3_h.sqlite3_open
 import org.sqlite.sqlite3_h.sqlite3_prepare_v3
 import org.sqlite.sqlite3_h.sqlite3_reset
@@ -29,6 +28,9 @@ import org.sqlite.sqlite3_h.sqlite3_step
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.nio.file.Path
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.InvocationKind
+import kotlin.contracts.contract
 import kotlin.io.path.absolutePathString
 
 class SQLite3Exception(message: String) : RuntimeException(message)
@@ -42,33 +44,40 @@ fun Int.ok(conn: MemorySegment) {
     }
 }
 
-class Statement(
-    val conn: MemorySegment,
-    val stmt: MemorySegment,
-) : AutoCloseable {
+@OptIn(ExperimentalContracts::class)
+class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseable {
 
     fun bind(arena: Arena, index: Int, arg: Any?) {
-        val sqlitePos = index + 1
+
+        /**
+         * > The leftmost SQL parameter has an index of 1
+         *
+         * [Binding values](https://www.sqlite.org/c3ref/bind_blob.html)
+         */
+        val pos = index + 1
 
         when (arg) {
             null ->
-                sqlite3_bind_null(stmt, sqlitePos)
+                sqlite3_bind_null(stmt, pos)
 
             is Boolean ->
-                sqlite3_bind_int(stmt, sqlitePos, if (arg) 1 else 0)
+                sqlite3_bind_int(stmt, pos, if (arg) 1 else 0)
 
             is Int ->
-                sqlite3_bind_int(stmt, sqlitePos, arg)
+                sqlite3_bind_int(stmt, pos, arg)
 
             is Long ->
-                sqlite3_bind_int64(stmt, sqlitePos, arg)
+                sqlite3_bind_int64(stmt, pos, arg)
 
             is Double ->
-                sqlite3_bind_double(stmt, sqlitePos, arg)
+                sqlite3_bind_double(stmt, pos, arg)
+
+            is Float ->
+                sqlite3_bind_double(stmt, pos, arg.toDouble())
 
             is String -> {
                 val cStr = arena.allocateFrom(arg)
-                sqlite3_bind_text(stmt, sqlitePos, cStr, cStr.byteSize().toInt(), SQLITE_STATIC())
+                sqlite3_bind_text(stmt, pos, cStr, cStr.byteSize().toInt(), SQLITE_STATIC())
             }
 
             else ->
@@ -76,15 +85,20 @@ class Statement(
         }.ok(conn)
     }
 
-    inline fun <T> bindReset(args: Array<Any?>, fn: (Statement) -> T): T {
-        val count = sqlite3_bind_parameter_count(stmt)
-        require(args.size == count) { "Expected $count arguments, got ${args.size}" }
+    val parameterCount = sqlite3_bind_parameter_count(stmt)
+
+    inline fun <T> bindAndReset(args: Array<Any?>, stepFn: (Statement) -> T): T {
+        contract {
+            callsInPlace(stepFn, InvocationKind.EXACTLY_ONCE)
+        }
+
+        require(args.size == parameterCount) { "Expected $parameterCount arguments, got ${args.size}" }
 
         return Arena.ofConfined().use { arena ->
             args.forEachIndexed { index, arg -> bind(arena, index, arg) }
 
             try {
-                fn(this)
+                stepFn(this)
             } finally {
                 sqlite3_reset(stmt)
                     .ok(conn)
@@ -93,16 +107,43 @@ class Statement(
     }
 
     fun exec(args: Array<Any?> = emptyArray()): Unit =
-        bindReset(args) {
+        bindAndReset(args) {
             when (sqlite3_step(stmt)) {
                 SQLITE_ROW(), SQLITE_DONE() -> {}
                 else -> throw SQLite3Exception(errMsg(conn))
             }
         }
 
+    /**
+     * Binds arguments and maps the first row of the result set to a value
+     *
+     * @param args arguments to bind
+     * @param mapFn function to map the first row of the result set
+     * @return the value returned by [mapFn]
+     */
+    inline fun <T> queryRow(args: Array<Any?> = emptyArray(), mapFn: (Statement) -> T): T {
+        contract {
+            callsInPlace(mapFn, InvocationKind.EXACTLY_ONCE)
+        }
+
+        return bindAndReset(args) {
+            when (sqlite3_step(stmt)) {
+                SQLITE_ROW() -> mapFn(this)
+                else -> throw SQLite3Exception(errMsg(conn))
+            }
+        }
+    }
+
+    private val columnCount = sqlite3_column_count(stmt)
+
+    /**
+     * > The leftmost column of the result set has the index 0
+     *
+     * [Result values](https://www.sqlite.org/c3ref/column_blob.html)
+     */
+    @Throws(IllegalArgumentException::class)
     private fun requireCol(i: Int): Int {
-        val count = sqlite3_column_count(stmt)
-        require(i < count) { "$i must be less than $count. Columns start from 0" }
+        require(i in 0..<columnCount) { "Column index $i must be in range ${0..<columnCount}" }
         return i
     }
 
@@ -121,26 +162,17 @@ class Statement(
     fun getBool(i: Int): Boolean =
         getInt(i) != 0
 
-    inline fun <T> queryRow(args: Array<Any?> = emptyArray(), fn: (Statement) -> T): T =
-        bindReset(args) {
-            if (sqlite3_step(stmt) != SQLITE_ROW()) {
-                throw SQLite3Exception(errMsg(conn))
-            }
-            fn(this)
-        }
-
     override fun close(): Unit =
         sqlite3_finalize(stmt)
             .ok(conn)
 }
 
-private inline fun Arena.ptrPtr(fn: (MemorySegment) -> Unit): MemorySegment {
-    val ptr = allocate(C_POINTER)
-    fn(ptr)
-    return ptr.get(C_POINTER, 0)
-}
-
-class SQLite3Conn(private val arena: Arena, private val conn: MemorySegment) : AutoCloseable {
+/**
+ * @param arena arena where connection and statements live
+ * @param conn SQLite3 connection pointer
+ */
+@OptIn(ExperimentalContracts::class)
+class SQLite3Conn private constructor(private val arena: Arena, private val conn: MemorySegment) : AutoCloseable {
 
     private val cache = HashMap<String, Statement>()
 
@@ -162,21 +194,31 @@ class SQLite3Conn(private val arena: Arena, private val conn: MemorySegment) : A
 
             return SQLite3Conn(arena = arena, conn = conn)
         }
+
+        private inline fun Arena.ptrPtr(fn: (MemorySegment) -> Unit): MemorySegment {
+            contract {
+                callsInPlace(fn, InvocationKind.EXACTLY_ONCE)
+            }
+
+            val ptr = allocate(C_POINTER)
+            fn(ptr)
+            return ptr.get(C_POINTER, 0)
+        }
     }
 
+    /**
+     * Executes SQL script
+     *
+     * @param sqlScript SQL script to execute
+     */
     fun exec(sqlScript: String): Unit =
         Arena.ofConfined().use { arena ->
-            val err = arena.ptrPtr {
-                val cStr = arena.allocateFrom(sqlScript)
-                val callback = MemorySegment.NULL
-                val callbackFirstArg = MemorySegment.NULL
-                sqlite3_exec(conn, cStr, callback, callbackFirstArg, it)
-                    .ok(conn)
-            }
-            if (err != MemorySegment.NULL) {
-                val msg = err.getString(0).also { sqlite3_free(err) }
-                throw SQLite3Exception(msg)
-            }
+            val cStr = arena.allocateFrom(sqlScript)
+            val callback = MemorySegment.NULL
+            val cbFirstArg = MemorySegment.NULL
+            val errMsg = MemorySegment.NULL
+            sqlite3_exec(conn, cStr, callback, cbFirstArg, errMsg)
+                .ok(conn)
         }
 
     fun prepare(sql: String): Statement {
@@ -204,6 +246,10 @@ class SQLite3Conn(private val arena: Arena, private val conn: MemorySegment) : A
     }
 
     inline fun <T> transact(mode: TxMode, fn: SQLite3Conn.() -> T): T {
+        contract {
+            callsInPlace(fn, InvocationKind.EXACTLY_ONCE)
+        }
+
         prepareCached("BEGIN $mode").exec()
         return try {
             fn(this).also {

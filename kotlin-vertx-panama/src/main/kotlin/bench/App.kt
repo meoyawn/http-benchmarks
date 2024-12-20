@@ -26,7 +26,7 @@ import java.lang.foreign.Arena
 import java.nio.file.Path
 import java.util.concurrent.Executors
 
-private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspend (ctx: RoutingContext) -> Unit) =
+private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspend RoutingContext.() -> Unit) =
     handler { ctx ->
         scope.launch {
             try {
@@ -78,19 +78,19 @@ private inline fun <reified T> RequestBody.fastJSON(): T =
 private fun <T> HttpServerResponse.fastJSON(t: T): Future<Void> =
     end(Buffer.buffer(t.toJSONByteArray()))
 
-private suspend fun httpPost(db: SendChannel<Call<NewPost, Post>>, ctx: RoutingContext) {
-    val body = ctx.body().fastJSON<NewPost>()
+private suspend fun RoutingContext.httpPost(db: SendChannel<Call<NewPost, Post>>) {
+    val body = body().fastJSON<NewPost>()
 
     val errs = body.validate()
     if (errs.isNotEmpty()) {
-        ctx.response()
+        response()
             .setStatusCode(400)
             .fastJSON(errs)
         return
     }
 
     val post = db.call(body)
-    ctx.response()
+    response()
         .setStatusCode(201)
         .fastJSON(post)
 }
@@ -171,7 +171,7 @@ class App : CoroutineVerticle() {
             }
 
             post("/posts").coHandler(scope = this@App) {
-                httpPost(dbChan, it)
+                httpPost(dbChan)
             }
         }
 

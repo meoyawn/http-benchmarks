@@ -15,7 +15,7 @@ oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m 
 
 | Framework                   | RPS | p50 latency |
 | --------------------------- | --- | ----------- |
-| Kotlin Vert.x SQLite Panama | 52K | 0.9ms       |
+| Kotlin Vert.x SQLite Panama | 53K | 0.9ms       |
 | Rust Actix-Web              | 51K | 0.9ms       |
 | Zig http.zig                | 43K | 1ms         |
 | Go FastHTTP                 | 43K | 1.1ms       |
@@ -40,7 +40,7 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 | ----------------- | ---- | ----------- |
 | Rust Actix-Web    | 266K | 0.2ms       |
 | Zig http.zig      | 264K | 0.2ms       |
-| Kotlin Vert.x     | 242K | 0.2ms       |
+| Kotlin Vert.x     | 247K | 0.2ms       |
 | Go FastHTTP       | 199K | 0.2ms       |
 | Python Blacksheep | 192K | 0.2ms       |
 | JS Bun Hono       | 156K | 0.3ms       |
