@@ -1,12 +1,17 @@
 package bench
 
+import com.alibaba.fastjson2.parseObject
+import com.alibaba.fastjson2.toJSONByteArray
+import io.vertx.core.Future
+import io.vertx.core.buffer.Buffer
+import io.vertx.core.http.HttpServerResponse
 import io.vertx.core.impl.logging.LoggerFactory
 import io.vertx.core.net.SocketAddress
+import io.vertx.ext.web.RequestBody
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import io.vertx.ext.web.handler.BodyHandler
-import io.vertx.ext.web.handler.HttpException
 import io.vertx.json.schema.common.RegularExpressions
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
@@ -67,19 +72,27 @@ private suspend fun <T, R> SendChannel<Call<T, R>>.call(req: T): R {
     return res.receive()
 }
 
+private inline fun <reified T> RequestBody.fastJSON(): T =
+    buffer().bytes.parseObject<T>()
+
+private fun <T> HttpServerResponse.fastJSON(t: T): Future<Void> =
+    end(Buffer.buffer(t.toJSONByteArray()))
+
 private suspend fun httpPost(db: SendChannel<Call<NewPost, Post>>, ctx: RoutingContext) {
-    val body = ctx.body().asPojo(NewPost::class.java) ?: throw HttpException(400)
+    val body = ctx.body().fastJSON<NewPost>()
 
     val errs = body.validate()
     if (errs.isNotEmpty()) {
-        ctx.response().statusCode = 400
-        ctx.json(errs)
+        ctx.response()
+            .setStatusCode(400)
+            .fastJSON(errs)
         return
     }
 
     val post = db.call(body)
-    ctx.response().statusCode = 201
-    ctx.json(post)
+    ctx.response()
+        .setStatusCode(201)
+        .fastJSON(post)
 }
 
 private fun SQLite3Conn.insertUser(email: String) =
@@ -153,8 +166,8 @@ class App : CoroutineVerticle() {
             route().handler(BodyHandler.create(false))
 
             post("/echo").handler {
-                val body = it.body().asPojo(NewPost::class.java)
-                it.json(body)
+                val body = it.body().fastJSON<NewPost>()
+                it.response().fastJSON(body)
             }
 
             post("/posts").coHandler(scope = this@App) {

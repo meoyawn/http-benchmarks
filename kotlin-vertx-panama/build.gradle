@@ -44,9 +44,8 @@ dependencies {
     )
 
     implementation(
-        platform("com.fasterxml.jackson:jackson-bom:2.18.2"),
-        "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", // java time
-        "com.fasterxml.jackson.module:jackson-module-kotlin",
+        'com.alibaba.fastjson2:fastjson2:2.0.53',
+        'com.alibaba.fastjson2:fastjson2-kotlin:2.0.53',
     )
 
     implementation(
