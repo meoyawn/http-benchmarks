@@ -1,5 +1,6 @@
 package sqlite
 
+import org.jetbrains.annotations.Range
 import org.sqlite.sqlite3_h.C_POINTER
 import org.sqlite.sqlite3_h.SQLITE_DONE
 import org.sqlite.sqlite3_h.SQLITE_OK
@@ -47,45 +48,41 @@ fun Int.ok(conn: MemorySegment) {
 @OptIn(ExperimentalContracts::class)
 class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseable {
 
-    fun bind(arena: Arena, index: Int, arg: Any?) {
+    val parameterCount = sqlite3_bind_parameter_count(stmt)
 
-        /**
-         * > The leftmost SQL parameter has an index of 1
-         *
-         * [Binding values](https://www.sqlite.org/c3ref/bind_blob.html)
-         */
-        val pos = index + 1
-
+    /**
+     * > The leftmost SQL parameter has an index of 1
+     *
+     * [Binding values](https://www.sqlite.org/c3ref/bind_blob.html)
+     */
+    fun bind(arena: Arena, index: @Range(from = 1, to = 32766) Int, arg: Any?): Unit =
         when (arg) {
             null ->
-                sqlite3_bind_null(stmt, pos)
+                sqlite3_bind_null(stmt, index)
 
             is Boolean ->
-                sqlite3_bind_int(stmt, pos, if (arg) 1 else 0)
+                sqlite3_bind_int(stmt, index, if (arg) 1 else 0)
 
             is Int ->
-                sqlite3_bind_int(stmt, pos, arg)
+                sqlite3_bind_int(stmt, index, arg)
 
             is Long ->
-                sqlite3_bind_int64(stmt, pos, arg)
+                sqlite3_bind_int64(stmt, index, arg)
 
             is Double ->
-                sqlite3_bind_double(stmt, pos, arg)
+                sqlite3_bind_double(stmt, index, arg)
 
             is Float ->
-                sqlite3_bind_double(stmt, pos, arg.toDouble())
+                sqlite3_bind_double(stmt, index, arg.toDouble())
 
             is String -> {
                 val cStr = arena.allocateFrom(arg)
-                sqlite3_bind_text(stmt, pos, cStr, cStr.byteSize().toInt(), SQLITE_STATIC())
+                sqlite3_bind_text(stmt, index, cStr, cStr.byteSize().toInt(), SQLITE_STATIC())
             }
 
             else ->
                 throw IllegalArgumentException("Unsupported argument type: ${arg::class.java}")
         }.ok(conn)
-    }
-
-    val parameterCount = sqlite3_bind_parameter_count(stmt)
 
     inline fun <T> bindAndReset(args: Array<Any?>, stepFn: (Statement) -> T): T {
         contract {
@@ -95,7 +92,7 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
         require(args.size == parameterCount) { "Expected $parameterCount arguments, got ${args.size}" }
 
         return Arena.ofConfined().use { arena ->
-            args.forEachIndexed { index, arg -> bind(arena, index, arg) }
+            args.forEachIndexed { index, arg -> bind(arena, index = index + 1, arg = arg) }
 
             try {
                 stepFn(this)
@@ -141,25 +138,24 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
      *
      * [Result values](https://www.sqlite.org/c3ref/column_blob.html)
      */
-    @Throws(IllegalArgumentException::class)
-    private fun requireCol(i: Int): Int {
+    private fun requireCol(i: @Range(from = 0, to = 32768) Int): Int {
         require(i in 0..<columnCount) { "Column index $i must be in range ${0..<columnCount}" }
         return i
     }
 
-    fun getLong(i: Int): Long =
+    fun getLong(i: @Range(from = 0, to = 32768) Int): Long =
         sqlite3_column_int64(stmt, requireCol(i))
 
-    fun getString(i: Int): String =
+    fun getString(i: @Range(from = 0, to = 32768) Int): String =
         sqlite3_column_text(stmt, requireCol(i)).getString(0)
 
-    fun getDouble(i: Int): Double =
+    fun getDouble(i: @Range(from = 0, to = 32768) Int): Double =
         sqlite3_column_double(stmt, requireCol(i))
 
-    fun getInt(i: Int): Int =
+    fun getInt(i: @Range(from = 0, to = 32768) Int): Int =
         sqlite3_column_int(stmt, requireCol(i))
 
-    fun getBool(i: Int): Boolean =
+    fun getBool(i: @Range(from = 0, to = 32768) Int): Boolean =
         getInt(i) != 0
 
     override fun close(): Unit =
