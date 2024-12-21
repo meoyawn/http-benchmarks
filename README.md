@@ -17,6 +17,7 @@ oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m 
 | --------------------------- | --- | ----------- |
 | Kotlin Vert.x SQLite Panama | 53K | 0.9ms       |
 | Rust Actix-Web              | 51K | 0.9ms       |
+| C# ASP.NET Core             | 45K | 1ms         |
 | Zig http.zig                | 43K | 1ms         |
 | Go FastHTTP                 | 43K | 1.1ms       |
 | Kotlin Vert.x SQLite JNI    | 40K | 1.1ms       |
@@ -43,5 +44,6 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 | Kotlin Vert.x     | 247K | 0.2ms       |
 | Go FastHTTP       | 199K | 0.2ms       |
 | Python Blacksheep | 192K | 0.2ms       |
+| C# ASP.NET Core   | 190K | 0.3ms       |
 | JS Bun Hono       | 156K | 0.3ms       |
 | Elixir Bandit     | 139K | 0.3ms       |

@@ -7,7 +7,7 @@ tasks:
   build:
     cmd: dotnet build --configuration Release
     sources:
-      - "**/.cs*"
+      - "**/*.cs*"
       - "appsettings.*"
     generates:
       - "{{.BINARY}}"
@@ -15,4 +15,6 @@ tasks:
   start:
     deps:
       - build
-    cmd: dotnet {{.BINARY}}
+    cmds:
+      - rm -rf /tmp/benchmark.sock
+      - dotnet {{.BINARY}}
