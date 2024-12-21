@@ -99,8 +99,6 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
             } finally {
                 sqlite3_reset(stmt)
                     .ok(conn)
-//                sqlite3_clear_bindings(stmt)
-//                    .ok(conn)
             }
         }
     }
@@ -141,7 +139,10 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
      * [Result values](https://www.sqlite.org/c3ref/column_blob.html)
      */
     private fun colIndex(i: @Range(from = 0, to = 32768) Int): Int {
-        require(i in 0..<columnCount) { "Column index $i must be in range ${0..<columnCount}" }
+        if (i !in 0..<columnCount) {
+            throw IndexOutOfBoundsException("Column: $i, count: $columnCount. Note that columns start at 0")
+        }
+
         return i
     }
 

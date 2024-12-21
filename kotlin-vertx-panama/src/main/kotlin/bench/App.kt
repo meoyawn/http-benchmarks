@@ -1,7 +1,6 @@
 package bench
 
-import com.alibaba.fastjson2.parseObject
-import com.alibaba.fastjson2.toJSONByteArray
+import com.alibaba.fastjson2.JSON
 import io.vertx.core.Future
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.HttpServerResponse
@@ -21,12 +20,13 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
+import org.jetbrains.annotations.VisibleForTesting
 import sqlite.SQLite3Conn
 import java.lang.foreign.Arena
 import java.nio.file.Path
 import java.util.concurrent.Executors
 
-private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspend RoutingContext.() -> Unit) =
+private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspend RoutingContext.() -> Unit): Route =
     handler { ctx ->
         scope.launch {
             try {
@@ -37,7 +37,8 @@ private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspen
         }
     }
 
-private data class NewPost(
+@VisibleForTesting
+data class NewPost(
     val email: String,
     val content: String,
 )
@@ -73,10 +74,10 @@ private suspend fun <T, R> SendChannel<Call<T, R>>.call(req: T): R {
 }
 
 private inline fun <reified T> RequestBody.fastJSON(): T =
-    buffer().bytes.parseObject<T>()
+    JSON.parseObject(buffer().bytes, T::class.java)
 
 private fun <T> HttpServerResponse.fastJSON(t: T): Future<Void> =
-    end(Buffer.buffer(t.toJSONByteArray()))
+    end(Buffer.buffer(JSON.toJSONBytes(t)))
 
 private suspend fun RoutingContext.httpPost(db: SendChannel<Call<NewPost, Post>>) {
     val body = body().fastJSON<NewPost>()
@@ -95,7 +96,7 @@ private suspend fun RoutingContext.httpPost(db: SendChannel<Call<NewPost, Post>>
         .fastJSON(post)
 }
 
-private fun SQLite3Conn.insertUser(email: String) =
+private fun SQLite3Conn.insertUser(email: String): Unit =
     prepareCached("INSERT OR IGNORE INTO users (email) VALUES (?)")
         .exec(arrayOf(email))
 
@@ -118,9 +119,9 @@ private fun SQLite3Conn.insertPost(req: NewPost): Post =
         )
     }
 
-private suspend fun dbWriter(chan: ReceiveChannel<Call<NewPost, Post>>) {
+private suspend fun dbWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost, Post>>): Unit =
     Arena.ofConfined().use { arena ->
-        SQLite3Conn.open(arena, Path.of("../db/db.sqlite")).use { conn ->
+        SQLite3Conn.open(arena, dbPath).use { conn ->
             conn.exec(
                 """
                 PRAGMA journal_mode = WAL;
@@ -146,7 +147,6 @@ private suspend fun dbWriter(chan: ReceiveChannel<Call<NewPost, Post>>) {
             conn.exec("PRAGMA optimize;")
         }
     }
-}
 
 class App : CoroutineVerticle() {
 
@@ -159,11 +159,12 @@ class App : CoroutineVerticle() {
     override suspend fun start() {
 
         launch(Executors.newSingleThreadExecutor().asCoroutineDispatcher()) {
-            dbWriter(dbChan)
+            dbWriter(Path.of("../db/db.sqlite"), dbChan)
         }
 
         val router = Router.router(vertx).apply {
-            route().handler(BodyHandler.create(false))
+            val fileUploads = false
+            route().handler(BodyHandler.create(fileUploads))
 
             post("/echo").handler {
                 val body = it.body().fastJSON<NewPost>()

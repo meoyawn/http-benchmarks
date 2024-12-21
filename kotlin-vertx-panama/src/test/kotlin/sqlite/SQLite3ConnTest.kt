@@ -18,10 +18,10 @@ class SQLite3ConnTest {
                     assertEquals(actual = res, expected = req)
                 }
 
-                val e = assertThrows<IllegalArgumentException> {
+                val e = assertThrows<IndexOutOfBoundsException> {
                     stmt.queryRow(arrayOf("HELLO")) { it.getString(1) }
                 }
-                assertEquals("123", e.message)
+                assertEquals(actual = e.message, expected = "index: 1, size: 1")
 
                 assertThrows<IllegalArgumentException> {
                     stmt.exec()

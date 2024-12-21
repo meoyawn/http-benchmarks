@@ -12,24 +12,15 @@ object Main {
 
     @JvmStatic
     fun main(args: Array<String>): Unit = runBlocking {
-        val vertx = Vertx.vertx(
-            VertxOptions().setPreferNativeTransport(true)
-        )
-        val retriever = ConfigRetriever.create(vertx, ConfigRetrieverOptions().setIncludeDefaultStores(true))
-
-        val config = retriever.config.coAwait()
-
-        val id = vertx.deployVerticle(
-            App(),
-            DeploymentOptions()
-                .setConfig(config)
-        ).coAwait()
-
+        val vertx = Vertx.vertx(VertxOptions().setPreferNativeTransport(true))
         Runtime.getRuntime().addShutdownHook(Thread {
             runBlocking {
-                vertx.undeploy(id).coAwait()
                 vertx.close().coAwait()
             }
         })
+
+        val retriever = ConfigRetriever.create(vertx, ConfigRetrieverOptions().setIncludeDefaultStores(true))
+        val config = retriever.config.coAwait()
+        vertx.deployVerticle(App(), DeploymentOptions().setConfig(config)).coAwait()
     }
 }
