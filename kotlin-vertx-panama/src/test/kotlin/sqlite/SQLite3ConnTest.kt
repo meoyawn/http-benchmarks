@@ -1,37 +1,46 @@
 package sqlite
 
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.assertAll
 import java.lang.foreign.Arena
-import kotlin.test.assertEquals
 
 class SQLite3ConnTest {
+
+    data class SingleString(
+        val str: String
+    )
 
     @Test
     fun prepare(): Unit = Arena.ofConfined().use { arena ->
         SQLite3Conn.openMemory(arena).use { conn ->
-            conn.prepare(sql = "SELECT ?").use { stmt ->
-
-                run {
+            conn.prepare(sql = "SELECT ? as str").use { stmt ->
+                assertAll({
                     val req = "HELLO"
-                    val res = stmt.queryRow(arrayOf(req)) { it.getString(0) }
-                    assertEquals(actual = res, expected = req)
-                }
+                    assertThat(stmt.queryRow(arrayOf(req)) { it.getString(0) })
+                        .isEqualTo(req)
 
-                val e = assertThrows<IndexOutOfBoundsException> {
-                    stmt.queryRow(arrayOf("HELLO")) { it.getString(1) }
-                }
-                assertEquals(actual = e.message, expected = "index: 1, size: 1")
+                    assertThat(stmt.queryRow(arrayOf(req)) { it.get(SingleString::class.java) })
+                        .isEqualTo(SingleString(req))
+                })
 
-                assertThrows<IllegalArgumentException> {
-                    stmt.exec()
-                }
+                assertAll({
+                    val i = 1
+                    assertThatThrownBy { stmt.queryRow(arrayOf("HELLO")) { it.getString(i) } }
+                        .isInstanceOf(IndexOutOfBoundsException::class.java)
+                        .hasMessageContaining(i.toString())
+                })
 
-                run {
+                assertThatThrownBy { stmt.exec() }
+                    .isInstanceOf(IllegalArgumentException::class.java)
+                    .hasMessageContainingAll("0", "1")
+
+                assertAll({
                     val req = 123
-                    val res = stmt.queryRow(arrayOf(req)) { it.getInt(0) }
-                    assertEquals(actual = res, expected = req)
-                }
+                    assertThat(stmt.queryRow(arrayOf(req)) { it.getInt(0) })
+                        .isEqualTo(req)
+                })
 
                 run {
                     stmt.exec(arrayOf(123))
@@ -50,10 +59,12 @@ class SQLite3ConnTest {
                 """
             )
 
-            val e = assertThrows<SQLite3Exception> {
-                conn.exec("jibberish;")
-            }
-            assertEquals(actual = e.message, expected = "near \"jibberish\": syntax error")
+            assertAll({
+                val sql = "jibberish"
+                assertThatThrownBy { conn.exec(sql) }
+                    .isInstanceOf(SQLite3Exception::class.java)
+                    .hasMessageContaining(sql)
+            })
         }
     }
 }

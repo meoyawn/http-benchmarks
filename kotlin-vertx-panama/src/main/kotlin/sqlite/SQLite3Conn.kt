@@ -3,6 +3,7 @@ package sqlite
 import org.jetbrains.annotations.Range
 import org.sqlite.sqlite3_h.C_POINTER
 import org.sqlite.sqlite3_h.SQLITE_DONE
+import org.sqlite.sqlite3_h.SQLITE_NULL
 import org.sqlite.sqlite3_h.SQLITE_OK
 import org.sqlite.sqlite3_h.SQLITE_PREPARE_PERSISTENT
 import org.sqlite.sqlite3_h.SQLITE_ROW
@@ -18,7 +19,9 @@ import org.sqlite.sqlite3_h.sqlite3_column_count
 import org.sqlite.sqlite3_h.sqlite3_column_double
 import org.sqlite.sqlite3_h.sqlite3_column_int
 import org.sqlite.sqlite3_h.sqlite3_column_int64
+import org.sqlite.sqlite3_h.sqlite3_column_name
 import org.sqlite.sqlite3_h.sqlite3_column_text
+import org.sqlite.sqlite3_h.sqlite3_column_type
 import org.sqlite.sqlite3_h.sqlite3_errmsg
 import org.sqlite.sqlite3_h.sqlite3_exec
 import org.sqlite.sqlite3_h.sqlite3_finalize
@@ -28,6 +31,8 @@ import org.sqlite.sqlite3_h.sqlite3_reset
 import org.sqlite.sqlite3_h.sqlite3_step
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.lang.reflect.Constructor
+import java.lang.reflect.Parameter
 import java.nio.file.Path
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.InvocationKind
@@ -84,7 +89,7 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
                 throw IllegalArgumentException("Unsupported argument type: ${arg::class.java}")
         }.ok(conn)
 
-    inline fun <T> bindAndReset(args: Array<Any?>, stepFn: (Statement) -> T): T {
+    inline fun <T> bindAndReset(args: Array<in Any?>, stepFn: (Statement) -> T): T {
         contract {
             callsInPlace(stepFn, InvocationKind.EXACTLY_ONCE)
         }
@@ -103,7 +108,7 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
         }
     }
 
-    fun exec(args: Array<Any?> = emptyArray()): Unit =
+    fun exec(args: Array<in Any?> = emptyArray()): Unit =
         bindAndReset(args) {
             when (sqlite3_step(stmt)) {
                 SQLITE_ROW(), SQLITE_DONE() -> {}
@@ -118,7 +123,7 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
      * @param mapFn function to map the first row of the result set
      * @return the value returned by [mapFn]
      */
-    inline fun <T> queryRow(args: Array<Any?> = emptyArray(), mapFn: (Statement) -> T): T {
+    inline fun <T> queryRow(args: Array<in Any?> = emptyArray(), mapFn: (Statement) -> T): T {
         contract {
             callsInPlace(mapFn, InvocationKind.EXACTLY_ONCE)
         }
@@ -160,6 +165,54 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
 
     fun getBool(i: @Range(from = 0, to = 32768) Int): Boolean =
         getInt(i) != 0
+
+    private data class ConstructorParam(
+        val ctr: Constructor<*>,
+        val name: String,
+    )
+
+    private val ctrCache = HashMap<Class<*>, Constructor<*>>()
+    private val ctrParamCache = HashMap<Constructor<*>, Array<out Parameter>>()
+    private val paramIdxCache = HashMap<ConstructorParam, Int>()
+
+    private fun bindColumn(ctr: Constructor<*>, params: Array<out Parameter>, args: Array<in Any>, columnIdx: Int) {
+        if (sqlite3_column_type(stmt, columnIdx) == SQLITE_NULL()) return
+
+        val name = sqlite3_column_name(stmt, columnIdx).getString(0)
+
+        val paramIdx = paramIdxCache.getOrPut(ConstructorParam(ctr, name)) {
+            params.indexOfFirst { it.name == name }.takeIf { it != -1 }
+                ?: throw IllegalArgumentException("No constructor parameter $name found in ${params.map { it.name }}")
+        }
+
+        val p = params[paramIdx]
+
+        args[paramIdx] = when (p.type) {
+            Int::class.java -> sqlite3_column_int(stmt, columnIdx)
+            Long::class.java -> sqlite3_column_int64(stmt, columnIdx)
+            Double::class.java -> sqlite3_column_double(stmt, columnIdx)
+            String::class.java -> sqlite3_column_text(stmt, columnIdx).getString(0)
+            Boolean::class.java -> sqlite3_column_int(stmt, columnIdx) != 0
+            else -> throw IllegalArgumentException("Unsupported $ctr arg $name: ${p.type}")
+        }
+    }
+
+    fun <T> get(cls: Class<T>): T {
+        val ctr = ctrCache.getOrPut(cls) {
+            cls.constructors.find { it.parameterCount == columnCount }
+                ?: throw IllegalArgumentException("No constructor with $columnCount parameters found for $cls")
+        }
+
+        val params = ctrParamCache.getOrPut(ctr) { ctr.parameters }
+
+        val args: Array<in Any?> = arrayOfNulls(ctr.parameterCount)
+        for (i in 0..<columnCount) {
+            bindColumn(ctr, params, args, i)
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        return ctr.newInstance(*args) as T
+    }
 
     override fun close(): Unit =
         sqlite3_finalize(stmt)

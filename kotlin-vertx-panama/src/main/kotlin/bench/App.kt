@@ -1,12 +1,10 @@
 package bench
 
-import com.alibaba.fastjson2.JSON
-import io.vertx.core.Future
-import io.vertx.core.buffer.Buffer
-import io.vertx.core.http.HttpServerResponse
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.module.paramnames.ParameterNamesModule
 import io.vertx.core.impl.logging.LoggerFactory
+import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.net.SocketAddress
-import io.vertx.ext.web.RequestBody
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
@@ -43,7 +41,8 @@ data class NewPost(
     val content: String,
 )
 
-private data class Post(
+@VisibleForTesting
+data class Post(
     val id: Long,
     val user_id: Long,
     val content: String,
@@ -73,27 +72,19 @@ private suspend fun <T, R> SendChannel<Call<T, R>>.call(req: T): R {
     return res.receive()
 }
 
-private inline fun <reified T> RequestBody.fastJSON(): T =
-    JSON.parseObject(buffer().bytes, T::class.java)
-
-private fun <T> HttpServerResponse.fastJSON(t: T): Future<Void> =
-    end(Buffer.buffer(JSON.toJSONBytes(t)))
-
 private suspend fun RoutingContext.httpPost(db: SendChannel<Call<NewPost, Post>>) {
-    val body = body().fastJSON<NewPost>()
+    val body = body().asPojo(NewPost::class.java)
 
     val errs = body.validate()
     if (errs.isNotEmpty()) {
-        response()
-            .setStatusCode(400)
-            .fastJSON(errs)
+        response().setStatusCode(400)
+        json(errs)
         return
     }
 
     val post = db.call(body)
-    response()
-        .setStatusCode(201)
-        .fastJSON(post)
+    response().setStatusCode(201)
+    json(post)
 }
 
 private fun SQLite3Conn.insertUser(email: String): Unit =
@@ -152,12 +143,17 @@ class App : CoroutineVerticle() {
 
     private companion object {
         val logger = LoggerFactory.getLogger(App::class.java)!!
+
+        init {
+            DatabindCodec.mapper()
+                .registerModules(ParameterNamesModule())
+                .enable(JsonParser.Feature.INCLUDE_SOURCE_IN_LOCATION)
+        }
     }
 
     private val dbChan = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
 
     override suspend fun start() {
-
         launch(Executors.newSingleThreadExecutor().asCoroutineDispatcher()) {
             dbWriter(Path.of("../db/db.sqlite"), dbChan)
         }
@@ -167,8 +163,8 @@ class App : CoroutineVerticle() {
             route().handler(BodyHandler.create(fileUploads))
 
             post("/echo").handler {
-                val body = it.body().fastJSON<NewPost>()
-                it.response().fastJSON(body)
+                val body = it.body().asPojo(NewPost::class.java)
+                it.json(body)
             }
 
             post("/posts").coHandler(scope = this@App) {

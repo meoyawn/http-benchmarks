@@ -39,9 +39,7 @@ dependencies {
         "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1",
     )
 
-    implementation(
-        'com.alibaba.fastjson2:fastjson2:2.0.53',
-    )
+    implementation 'com.fasterxml.jackson.module:jackson-module-parameter-names:2.18.2'
 
     implementation(
         platform("io.vertx:vertx-dependencies:4.5.11"),
@@ -49,6 +47,7 @@ dependencies {
         "io.vertx:vertx-lang-kotlin-coroutines",
         "io.vertx:vertx-web",
         "io.vertx:vertx-json-schema",
+        "io.vertx:vertx-web-client",
     )
     if (System.getProperty('os.name') == 'Mac OS X' && System.getProperty('os.arch') == 'aarch64') {
         implementation(
@@ -57,7 +56,10 @@ dependencies {
         )
     }
 
-    testImplementation 'org.jetbrains.kotlin:kotlin-test'
+    testImplementation(
+        'org.jetbrains.kotlin:kotlin-test',
+        'org.assertj:assertj-core:3.27.2',
+    )
 }
 
 test {
@@ -66,10 +68,15 @@ test {
 
 kotlin {
     compilerOptions {
+        /**
+         * https://kotlinlang.org/docs/gradle-compiler-options.html#example-of-additional-arguments-usage-via-freecompilerargs
+         * https://kotlinlang.org/docs/compiler-reference.html#java-parameters
+         */
         freeCompilerArgs.addAll(
             "-Xno-call-assertions",
             "-Xno-param-assertions",
             "-Xno-receiver-assertions",
+            "-java-parameters",
         )
     }
 }
