@@ -164,8 +164,9 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
         sqlite3_column_int(stmt, colIndex(i))
 
     fun getBool(i: @Range(from = 0, to = 32768) Int): Boolean =
-        getInt(i) != 0
+        getInt(i) == 1
 
+    //region Reflection
     private data class ConstructorParam(
         val ctr: Constructor<*>,
         val name: String,
@@ -175,6 +176,9 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
     private val ctrParamCache = HashMap<Constructor<*>, Array<out Parameter>>()
     private val paramIdxCache = HashMap<ConstructorParam, Int>()
 
+    /**
+     * 3x sqlite3_ calls, while column based access (e.g. [getLong]) is 1x
+     */
     private fun bindColumn(ctr: Constructor<*>, params: Array<out Parameter>, args: Array<in Any>, columnIdx: Int) {
         if (sqlite3_column_type(stmt, columnIdx) == SQLITE_NULL()) return
 
@@ -197,6 +201,11 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
         }
     }
 
+    /**
+     * reflection based constructor invocation
+     *
+     * this is slower than accessing columns by index e.g. [getLong]
+     */
     fun <T> get(cls: Class<T>): T {
         val ctr = ctrCache.getOrPut(cls) {
             cls.constructors.find { it.parameterCount == columnCount }
@@ -213,6 +222,7 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
         @Suppress("UNCHECKED_CAST")
         return ctr.newInstance(*args) as T
     }
+    //endregion
 
     override fun close(): Unit =
         sqlite3_finalize(stmt)
