@@ -3,9 +3,7 @@
     // Enable latest features
     "allowImportingTsExtensions": true,
     "allowJs": true,
-    "lib": [
-      "ESNext"
-    ],
+    "lib": ["ESNext"],
     "module": "ESNext",
     "moduleDetection": "force",
     // Bundler mode

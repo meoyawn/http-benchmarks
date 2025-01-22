@@ -1,17 +1,17 @@
 {
   "name": "bun-polka",
-  "module": "index.ts",
   "type": "module",
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/polka": "^0.5.7",
-    "typescript": "^5.0.0",
-    "prettier": "^3.4.2",
-    "prettier-plugin-organize-imports": "^4.1.0",
-    "prettier-plugin-packagejson": "^2.5.8"
-  },
+  "module": "index.ts",
   "dependencies": {
     "body-parser": "^1.20.3",
     "polka": "^0.5.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/polka": "^0.5.7",
+    "prettier": "^3.4.2",
+    "prettier-plugin-organize-imports": "^4.1.0",
+    "prettier-plugin-packagejson": "^2.5.8",
+    "typescript": "^5.0.0"
   }
 }
