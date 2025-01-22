@@ -117,13 +117,13 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
         }
 
     /**
-     * Binds arguments and maps the first row of the result set to a value
+     * Binds [args] and maps the first row to [T]
      *
      * @param args arguments to bind
      * @param mapFn function to map the first row of the result set
-     * @return the value returned by [mapFn]
+     * @return [T] returned by [mapFn]
      */
-    inline fun <T> queryRow(args: Array<in Any?> = emptyArray(), mapFn: (Statement) -> T): T {
+    inline fun <T> queryFirst(args: Array<in Any?> = emptyArray(), mapFn: (Statement) -> T): T {
         contract {
             callsInPlace(mapFn, InvocationKind.EXACTLY_ONCE)
         }
@@ -132,6 +132,20 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
             when (sqlite3_step(stmt)) {
                 SQLITE_ROW() -> mapFn(this)
                 else -> throw SQLite3Exception(errMsg(conn))
+            }
+        }
+    }
+
+    inline fun <T> queryList(args: Array<in Any?> = emptyArray(), mapFn: (Statement) -> T): List<T> {
+        contract {
+            callsInPlace(mapFn, InvocationKind.UNKNOWN)
+        }
+
+        return bindAndReset(args) {
+            ArrayList<T>().apply {
+                while (sqlite3_step(stmt) == SQLITE_ROW()) {
+                    add(mapFn(this@Statement))
+                }
             }
         }
     }

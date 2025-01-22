@@ -24,23 +24,13 @@ import java.lang.foreign.Arena
 import java.nio.file.Path
 import java.util.concurrent.Executors
 
-private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspend RoutingContext.() -> Unit): Route =
-    handler { ctx ->
-        scope.launch {
-            try {
-                fn(ctx)
-            } catch (e: Exception) {
-                ctx.fail(500, e)
-            }
-        }
-    }
-
 @VisibleForTesting
 data class NewPost(
     val email: String,
     val content: String,
 )
 
+@Suppress("PropertyName")
 @VisibleForTesting
 data class Post(
     val id: Long,
@@ -72,6 +62,17 @@ private suspend fun <T, R> SendChannel<Call<T, R>>.call(req: T): R {
     return res.receive()
 }
 
+private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspend RoutingContext.() -> Unit): Route =
+    handler { ctx ->
+        scope.launch {
+            try {
+                fn(ctx)
+            } catch (e: Exception) {
+                ctx.fail(500, e)
+            }
+        }
+    }
+
 private suspend fun RoutingContext.httpPost(db: SendChannel<Call<NewPost, Post>>) {
     val body = body().asPojo(NewPost::class.java)
 
@@ -100,7 +101,7 @@ private fun SQLite3Conn.insertPost(req: NewPost): Post =
         WHERE       email = ?
         RETURNING   id, user_id, content, created_at, updated_at
         """
-    ).queryRow(arrayOf(req.content, req.email)) {
+    ).queryFirst(arrayOf(req.content, req.email)) {
         Post(
             id = it.getLong(0),
             user_id = it.getLong(1),

@@ -18,16 +18,19 @@ class SQLite3ConnTest {
             conn.prepare(sql = "SELECT ? as str").use { stmt ->
                 assertAll({
                     val req = "HELLO"
-                    assertThat(stmt.queryRow(arrayOf(req)) { it.getString(0) })
+                    assertThat(stmt.queryFirst(arrayOf(req)) { it.getString(0) })
                         .isEqualTo(req)
 
-                    assertThat(stmt.queryRow(arrayOf(req)) { it.get(SingleString::class.java) })
+                    assertThat(stmt.queryFirst(arrayOf(req)) { it.get(SingleString::class.java) })
                         .isEqualTo(SingleString(req))
+
+                    assertThat(stmt.queryList(arrayOf(req)) { it.getString(0) })
+                        .isEqualTo(listOf(req))
                 })
 
                 assertAll({
                     val i = 1
-                    assertThatThrownBy { stmt.queryRow(arrayOf("HELLO")) { it.getString(i) } }
+                    assertThatThrownBy { stmt.queryFirst(arrayOf("HELLO")) { it.getString(i) } }
                         .isInstanceOf(IndexOutOfBoundsException::class.java)
                         .hasMessageContaining(i.toString())
                 })
@@ -38,7 +41,7 @@ class SQLite3ConnTest {
 
                 assertAll({
                     val req = 123
-                    assertThat(stmt.queryRow(arrayOf(req)) { it.getInt(0) })
+                    assertThat(stmt.queryFirst(arrayOf(req)) { it.getInt(0) })
                         .isEqualTo(req)
                 })
 
