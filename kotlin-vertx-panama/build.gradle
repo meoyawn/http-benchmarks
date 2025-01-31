@@ -48,7 +48,10 @@ dependencies {
         "io.vertx:vertx-web",
         "io.vertx:vertx-json-schema",
         "io.vertx:vertx-web-client",
+
+        // pg
         "io.vertx:vertx-pg-client",
+        'com.ongres.scram:client:2.1',
     )
     if (System.getProperty('os.name') == 'Mac OS X' && System.getProperty('os.arch') == 'aarch64') {
         implementation(

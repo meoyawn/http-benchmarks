@@ -15,7 +15,7 @@ tasks:
       - ../openapi/http.json
 
   start:
-    cmd: bun --watch src/server.ts
+    - bun --watch src/server.ts
 
   jbuild:
     desc: Single .js

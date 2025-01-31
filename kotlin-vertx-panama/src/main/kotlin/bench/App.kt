@@ -65,9 +65,9 @@ private suspend fun <T, R> SendChannel<Call<T, R>>.call(req: T): R {
     return res.receive()
 }
 
-private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspend RoutingContext.() -> Unit): Route =
-    handler { ctx ->
-        scope.launch {
+private inline fun CoroutineScope.coHandler(route: Route, crossinline fn: suspend RoutingContext.() -> Unit): Route =
+    route.handler { ctx ->
+        launch {
             try {
                 fn(ctx)
             } catch (e: Exception) {
@@ -151,11 +151,14 @@ class App : CoroutineVerticle() {
         }
     }
 
-    private val writeSQLite = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
+    private val writeSQLiteChan = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
+    private lateinit var pg: Pool
 
     override suspend fun start() {
+        pg = mkPG(vertx)
+
         launch(Executors.newSingleThreadExecutor().asCoroutineDispatcher()) {
-            sqliteWriter(Path.of("../db/db.sqlite"), writeSQLite)
+            sqliteWriter(Path.of("../db/db.sqlite"), writeSQLiteChan)
         }
 
         val router = Router.router(vertx).apply {
@@ -167,14 +170,9 @@ class App : CoroutineVerticle() {
                 it.json(body)
             }
 
-//            post("/posts").coHandler(scope = this@App) {
-//                postSQLite(writeSQLite)
-//            }
+           coHandler(post("/posts")) { postSQLite(writeSQLiteChan) }
 
-            val pg = mkPG(vertx)
-            post("/posts").coHandler(scope = this@App) {
-                postPG(pg)
-            }
+            // coHandler(post("/posts")) { postPG(pg) }
         }
 
         val uds = config.getString("http.socket", "/tmp/benchmark.sock")
@@ -189,6 +187,8 @@ class App : CoroutineVerticle() {
 
     override suspend fun stop() {
         // closes database
-        writeSQLite.close()
+        writeSQLiteChan.close()
+
+        pg.close().coAwait()
     }
 }

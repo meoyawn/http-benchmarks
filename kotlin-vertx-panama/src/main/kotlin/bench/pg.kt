@@ -32,9 +32,9 @@ suspend fun mkPG(vertx: Vertx): Pool =
     PgBuilder.pool()
         .connectingTo(PgConnectOptions().apply {
             host = "localhost"
-            port = 5432
             user = "postgres"
             password = "postgres"
+            database = "postgres"
             cachePreparedStatements = true
         })
         .with(PgPoolOptions().apply {
@@ -45,7 +45,7 @@ suspend fun mkPG(vertx: Vertx): Pool =
         .also {
             it.transact {
                 for (s in MIGRATION.splitToSequence(';')) {
-                    query(s.trim()).execute().coAwait()
+                    prepare(s.trim()).coAwait().cursor().close().coAwait()
                 }
             }
         }
@@ -69,7 +69,13 @@ suspend inline fun <T> Pool.transact(fn: SqlConnection.() -> T): T {
 }
 
 suspend fun SqlConnection.insertUser(email: String): Unit =
-    preparedQuery("INSERT OR IGNORE INTO users (email) VALUES ($1)")
+    preparedQuery(
+        """
+        INSERT INTO users   (email)
+        VALUES              ($1)
+        ON CONFLICT (email) DO NOTHING
+        """
+    )
         .execute(Tuple.of(email))
         .coAwait()
         .let { }
