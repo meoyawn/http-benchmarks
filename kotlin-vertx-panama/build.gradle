@@ -1,8 +1,8 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '2.1.0'
+    id 'org.jetbrains.kotlin.jvm' version '2.1.10'
     id 'application'
     id "com.github.johnrengelman.shadow" version "8.1.1"
-    id "com.github.ben-manes.versions" version "0.51.0"
+    id "com.github.ben-manes.versions" version "0.52.0"
     id "idea"
 }
 
@@ -35,30 +35,31 @@ repositories {
 
 dependencies {
     implementation(
-        "org.jetbrains.kotlin:kotlin-stdlib",
+        "org.jetbrains.kotlin:kotlin-stdlib:2.1.10",
         "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1",
     )
 
     implementation 'com.fasterxml.jackson.module:jackson-module-parameter-names:2.18.2'
 
     implementation(
-        platform("io.vertx:vertx-dependencies:4.5.11"),
+        platform("io.vertx:vertx-dependencies:4.5.12"),
         "io.vertx:vertx-config",
         "io.vertx:vertx-lang-kotlin-coroutines",
         "io.vertx:vertx-web",
         "io.vertx:vertx-json-schema",
         "io.vertx:vertx-web-client",
+        "io.vertx:vertx-pg-client",
     )
     if (System.getProperty('os.name') == 'Mac OS X' && System.getProperty('os.arch') == 'aarch64') {
         implementation(
-            'io.netty:netty-resolver-dns-native-macos:4.1.116.Final:osx-aarch_64',
-            'io.netty:netty-transport-native-kqueue:4.1.116.Final:osx-aarch_64',
+            'io.netty:netty-resolver-dns-native-macos:4.1.117.Final:osx-aarch_64',
+            'io.netty:netty-transport-native-kqueue:4.1.117.Final:osx-aarch_64',
         )
     }
 
     testImplementation(
         'org.jetbrains.kotlin:kotlin-test',
-        'org.assertj:assertj-core:3.27.2',
+        'org.assertj:assertj-core:3.27.3',
     )
 }
 

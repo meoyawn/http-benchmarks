@@ -31,6 +31,7 @@ import org.sqlite.sqlite3_h.sqlite3_reset
 import org.sqlite.sqlite3_h.sqlite3_step
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.lang.invoke.MethodHandles
 import java.lang.reflect.Constructor
 import java.lang.reflect.Parameter
 import java.nio.file.Path

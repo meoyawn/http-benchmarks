@@ -2,6 +2,8 @@ package bench
 
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule
+import insertPost
+import insertUser
 import io.vertx.core.impl.logging.LoggerFactory
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.net.SocketAddress
@@ -12,6 +14,7 @@ import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.json.schema.common.RegularExpressions
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
+import io.vertx.sqlclient.Pool
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
@@ -73,7 +76,7 @@ private inline fun Route.coHandler(scope: CoroutineScope, crossinline fn: suspen
         }
     }
 
-private suspend fun RoutingContext.httpPost(db: SendChannel<Call<NewPost, Post>>) {
+private suspend fun RoutingContext.postSQLite(db: SendChannel<Call<NewPost, Post>>) {
     val body = body().asPojo(NewPost::class.java)
 
     val errs = body.validate()
@@ -88,30 +91,7 @@ private suspend fun RoutingContext.httpPost(db: SendChannel<Call<NewPost, Post>>
     json(post)
 }
 
-private fun SQLite3Conn.insertUser(email: String): Unit =
-    prepareCached("INSERT OR IGNORE INTO users (email) VALUES (?)")
-        .exec(arrayOf(email))
-
-private fun SQLite3Conn.insertPost(req: NewPost): Post =
-    prepareCached(
-        """
-        INSERT INTO posts   (content,   user_id)
-        SELECT              ?,          id
-        FROM        users
-        WHERE       email = ?
-        RETURNING   id, user_id, content, created_at, updated_at
-        """
-    ).queryFirst(arrayOf(req.content, req.email)) {
-        Post(
-            id = it.getLong(0),
-            user_id = it.getLong(1),
-            content = it.getString(2),
-            created_at = it.getLong(3),
-            updated_at = it.getLong(4),
-        )
-    }
-
-private suspend fun dbWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost, Post>>): Unit =
+private suspend fun sqliteWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost, Post>>): Unit =
     Arena.ofConfined().use { arena ->
         SQLite3Conn.open(arena, dbPath).use { conn ->
             conn.exec(
@@ -140,6 +120,25 @@ private suspend fun dbWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost, Po
         }
     }
 
+private suspend fun RoutingContext.postPG(pg: Pool) {
+    val body = body().asPojo(NewPost::class.java)
+
+    val errs = body.validate()
+    if (errs.isNotEmpty()) {
+        response().setStatusCode(400)
+        json(errs)
+        return
+    }
+
+    val post = pg.transact {
+        insertUser(body.email)
+        insertPost(body)
+    }
+
+    response().setStatusCode(201)
+    json(post)
+}
+
 class App : CoroutineVerticle() {
 
     private companion object {
@@ -152,11 +151,11 @@ class App : CoroutineVerticle() {
         }
     }
 
-    private val dbChan = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
+    private val writeSQLite = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
 
     override suspend fun start() {
         launch(Executors.newSingleThreadExecutor().asCoroutineDispatcher()) {
-            dbWriter(Path.of("../db/db.sqlite"), dbChan)
+            sqliteWriter(Path.of("../db/db.sqlite"), writeSQLite)
         }
 
         val router = Router.router(vertx).apply {
@@ -168,8 +167,13 @@ class App : CoroutineVerticle() {
                 it.json(body)
             }
 
+//            post("/posts").coHandler(scope = this@App) {
+//                postSQLite(writeSQLite)
+//            }
+
+            val pg = mkPG(vertx)
             post("/posts").coHandler(scope = this@App) {
-                httpPost(dbChan)
+                postPG(pg)
             }
         }
 
@@ -185,6 +189,6 @@ class App : CoroutineVerticle() {
 
     override suspend fun stop() {
         // closes database
-        dbChan.close()
+        writeSQLite.close()
     }
 }
