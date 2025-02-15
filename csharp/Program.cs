@@ -1,6 +1,11 @@
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 using System.Threading.Channels;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 
 var dbChan = Channel.CreateUnbounded<Call<NewPost, Post>>();
@@ -40,24 +45,16 @@ new Thread(async void () =>
 }).Start();
 
 webApp.MapPost("/echo", (NewPost post) => post);
-webApp.MapPost("/posts", async (NewPost body) =>
+webApp.MapPost("/posts", async Task<IValueHttpResult> (NewPost body) =>
 {
     var errs = body.Validate();
-    if (errs.Count > 0) return Results.BadRequest(errs);
+    if (errs.Count > 0) return TypedResults.ValidationProblem(errs);
 
-    var post = await Call(dbChan, body);
+    var post = await dbChan.Call(body);
     return TypedResults.Created((string?)null, post);
 });
 
 webApp.Run();
-return;
-
-static async Task<TRes> Call<TReq, TRes>(Channel<Call<TReq, TRes>> chan, TReq req)
-{
-    var res = Channel.CreateBounded<TRes>(1);
-    await chan.Writer.WriteAsync(new Call<TReq, TRes>(req, res.Writer));
-    return await res.Reader.ReadAsync();
-}
 
 internal readonly record struct Call<TReq, TRes>(
     TReq Req,
@@ -96,16 +93,23 @@ internal static class DbOps
         using var reader = cmd.ExecuteReader();
         reader.Read();
         return new Post(
-            Id: reader.GetInt64(0),
-            UserId: reader.GetInt64(1),
-            Content: reader.GetString(2),
-            CreatedAt: reader.GetInt64(3),
-            UpdatedAt: reader.GetInt64(4)
+            id: reader.GetInt64(0),
+            user_id: reader.GetInt64(1),
+            content: reader.GetString(2),
+            created_at: reader.GetInt64(3),
+            updated_at: reader.GetInt64(4)
         );
+    }
+
+    public static async Task<TRes> Call<TReq, TRes>(this Channel<Call<TReq, TRes>> chan, TReq req)
+    {
+        var res = Channel.CreateBounded<TRes>(1);
+        await chan.Writer.WriteAsync(new Call<TReq, TRes>(req, res.Writer));
+        return await res.Reader.ReadAsync();
     }
 }
 
-internal class CachingConnection(SqliteConnection conn) : IDisposable
+internal class CachingConnection : IDisposable
 {
     public enum TxMode
     {
@@ -115,6 +119,12 @@ internal class CachingConnection(SqliteConnection conn) : IDisposable
     }
 
     private readonly Dictionary<string, SqliteCommand> _cache = new();
+    private readonly SqliteConnection _conn;
+
+    private CachingConnection(SqliteConnection conn)
+    {
+        _conn = conn;
+    }
 
     public static CachingConnection Open(SqliteConnection conn)
     {
@@ -126,7 +136,7 @@ internal class CachingConnection(SqliteConnection conn) : IDisposable
     {
         if (_cache.TryGetValue(sql, out var cmd)) return cmd;
 
-        cmd = conn.CreateCommand();
+        cmd = _conn.CreateCommand();
         cmd.CommandText = sql;
         _cache[sql] = cmd;
         return cmd;
@@ -134,7 +144,7 @@ internal class CachingConnection(SqliteConnection conn) : IDisposable
 
     public void Exec(string sql)
     {
-        using var cmd = conn.CreateCommand();
+        using var cmd = _conn.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
     }
@@ -160,7 +170,7 @@ internal class CachingConnection(SqliteConnection conn) : IDisposable
         foreach (var cmd in _cache.Values) cmd.Dispose();
 
         _cache.Clear();
-        conn.Dispose();
+        _conn.Dispose();
     }
 }
 
@@ -171,22 +181,43 @@ internal readonly record struct NewPost(
 {
     private static readonly EmailAddressAttribute EmailAttr = new();
 
-    public IReadOnlyList<string> Validate()
+    public Dictionary<string, string[]> Validate()
     {
-        var errs = new List<string>();
-        if (Content.Length == 0) errs.Add("content: cannot be empty");
-        if (!EmailAttr.IsValid(Email)) errs.Add($"email: invalid: {Email}");
+        var errs = new Dictionary<string, string[]>();
+
+        if (Content.Length == 0) errs["content"] = ["Cannot be empty"];
+        if (!EmailAttr.IsValid(Email)) errs["email"] = [$"Invalid: {Email}"];
         return errs;
     }
 }
 
 internal readonly record struct Post(
-    long Id,
-    [property: JsonPropertyName("user_id")]
-    long UserId,
-    string Content,
-    [property: JsonPropertyName("created_at")]
-    long CreatedAt,
-    [property: JsonPropertyName("updated_at")]
-    long UpdatedAt
+    // ReSharper disable InconsistentNaming
+    // ReSharper disable NotAccessedPositionalProperty.Global
+    long id,
+    long user_id,
+    string content,
+    long created_at,
+    long updated_at
+    // ReSharper restore NotAccessedPositionalProperty.Global
+    // ReSharper restore InconsistentNaming
 );
+
+namespace Tests
+{
+    using System.Text.Json;
+    using Xunit;
+
+    public class NewPostTests
+    {
+        [Fact]
+        public void NewPost_Serialization_Deserialization_Works()
+        {
+            var original = new NewPost(Content: "Sample content", Email: "test@example.com");
+            var json = JsonSerializer.Serialize(original);
+            var deserialized = JsonSerializer.Deserialize<NewPost>(json);
+
+            Assert.Equal(original, deserialized);
+        }
+    }
+}
