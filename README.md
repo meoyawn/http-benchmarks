@@ -9,7 +9,8 @@
 
 Apple M1 Pro **10 cores (8 performance + 2 efficiency)**, 16 GiB RAM, macOS 26.4.
 Go, Kotlin Panama and OCaml were remeasured on **2026-09-17**; Rust was remeasured
-on **2026-09-18**. Each has three runs with fresh processes and databases;
+on **2026-09-18**, when Kotlin GraalVM was also measured separately.
+Each has three runs with fresh processes and databases;
 multi-implementation comparisons rotate their order. Each process handles `/posts` for
 10 seconds, then `/echo` for 10 seconds: `pkgx oha` **1.16.0**, 50 connections,
 no HTTP warm-up. RPS and p50 are medians; RAM is the largest sampled RSS.
@@ -40,8 +41,12 @@ The full [1/2/4/8-domain results](ocaml/README.md#multicore-results)
 document the tradeoff.
 The previous single-event-loop OCaml results are superseded.
 
-Kotlin uses **OpenJDK 26.0.2.1**, **Kotlin 2.4.20**, **Vert.x Web 5.1.8**,
+Kotlin's JVM row uses **OpenJDK 26.0.2.1**, **Kotlin 2.4.20**, **Vert.x Web 5.1.8**,
 **fastjson2 2.0.65** and Panama FFM, with four HTTP event loops and one writer.
+The GraalVM row uses the same application and SQLite with **Oracle GraalVM
+25.3.4.1 / JDK 25.0.4.1**, `-O3`, `-march=native`, the default Serial GC and
+ML-inferred profiles (no workload-trained PGO). fastjson2 initializes at runtime
+in the native executable. Both optimized native and fat-JAR builds remain available.
 Go uses **1.27.1**, **Hertz 0.10.6 / netpoll 0.7.5**, **goccy/go-json 0.10.6**,
 and **Tailscale SQLite acbe2dadf94c**. Setup: [Go](go/README.md),
 [Kotlin](kotlin/README.md), [OCaml](ocaml/README.md).
@@ -68,13 +73,21 @@ Use `pkgx oha` if `oha` is not installed.
 | Go Hertz / Tailscale SQLite | 45.2K | 0.988ms | 73.3 MiB | 233% | 9.52ms | 21.11s | 1.23s | 10.12 MiB |
 | OCaml Cohttp/Eio (1 HTTP + 1 writer) | 45.1K | 0.973ms | 35.6 MiB | 157% | 8.92ms | 1.12s | 0.521s | 4.60 MiB |
 | C# ASP.NET Core | 45K | 1ms | — | — | — | — | — | — |
-| Kotlin Vert.x SQLite Panama | 44.5K | 0.998ms | 225.3 MiB | 192% | 1.209s | 18.21s | 1.30s | 17.57 MiB (JAR) |
+| Kotlin Vert.x SQLite Panama (JVM) | 44.5K | 0.998ms | 225.3 MiB | 192% | 1.209s | 18.21s | 1.30s | 17.57 MiB (JAR) |
 | Zig http.zig | 43K | 1ms | — | — | — | — | — | — |
 | JS Bun Hono | 21K | 1.9ms | — | — | — | — | — | — |
 | Python Blacksheep | 19K | 2.5ms | — | — | — | — | — | — |
 | Elixir Bandit | 10K | 4.9ms | — | — | — | — | — | — |
+| [Kotlin Vert.x SQLite Panama (GraalVM)](kotlin/#optimized-graalvm-executable) | 9.1K | 5.038ms | 110.5 MiB | 116% | 653.69ms | 149.72s | 1.30s (JVM) | 94.16 MiB |
 
 Go now measures **45.2K writes/sec** and **297.9K echo RPS**, above the previous 43.7K / 288.0K entries. Kotlin measures **44.5K / 373.6K**, above 42.7K / 364.6K. These are three-run medians, not the best individual samples.
+
+Kotlin GraalVM measures **9.1K writes/sec** and **302.7K echo RPS**, with a
+**653.69ms** startup median. It uses less sampled RSS and starts faster than the
+retained JVM result, but has lower throughput, particularly on the SQLite path.
+These are measurements of the `-O3` native build; its throughput bottleneck has
+not been profiled. Native writes ranged from **9.08K–9.12K**, and echo from
+**302.3K–304.9K**. All native runs passed the response and database checks.
 
 Rust measures **48.5K writes/sec** with one HTTP worker and
 **400.4K echo RPS** with three. The default's write runs ranged
@@ -88,7 +101,8 @@ Databases are migrated beforehand, and an untimed echo checks readiness afterwar
 Builds and migration are excluded. Filesystem caches are not flushed, so these
 are process-start measurements, not guaranteed cold-cache startup.
 [Go/Kotlin script](measure-startup.py), [OCaml script](ocaml/measure-startup.py),
-[Rust script](rust/measure-startup.py). Rust also includes HTTP worker setup.
+[Rust script](rust/measure-startup.py),
+[Kotlin GraalVM script](kotlin/measure-native.py). Rust also includes HTTP worker setup.
 The earlier ~39ms ntex result included an unconditional 25ms framework startup
 sleep; switching to Actix brings measured startup below 9ms.
 [Startup diagnosis](rust/README.md#measured-results).
@@ -107,6 +121,8 @@ Compiled output hashes verify that each edit caused a rebuild.
   on **OpenJDK 26.0.2.1**. This is the compilation/resources prerequisite of
   `application run`, with debug metadata and incremental Kotlin compilation;
   it neither starts the server nor packages a JAR.
+  The GraalVM row shares this retained JVM development workflow; its `(JVM)`
+  label distinguishes that measurement from a native-image rebuild.
 - OCaml: `dune build --profile dev bin/bench.exe`, using the **pkgx** toolchain
   wrapper and the pinned Flambda compiler. The rename also regenerates ATD codecs;
   Dune compiles and links with development/debug flags, without release `-O3`.
@@ -126,14 +142,17 @@ root with a fresh output directory:
 python3 measure-debug-build.py results/debug-build
 ```
 
-**Clean release build** retains the earlier three-run medians. Its definitions
-differ by language:
+**Clean release build** reports three-run medians. The GraalVM measurement is
+new; the other rows retain their earlier measurements. Definitions differ by language:
 
 - [Go](go/measure-build.py): a fresh `GOCACHE` per clean build compiles the standard
   library, dependencies, bundled SQLite C and application. `CGO_CFLAGS=-O3 -DNDEBUG`.
 - [Kotlin](kotlin/measure-build.py): warm Gradle/Kotlin daemons and
   offline dependencies, build cache disabled. `clean shadowJar` includes SQLite C
   compilation, jextract, Kotlin/Java compilation and JAR packaging.
+  GraalVM uses three `clean nativeCompile` builds on JDK 25, including the same
+  prerequisites plus `-O3` native compilation, linking, stripping and macOS
+  ad-hoc signing. Dependency and reachability-metadata downloads are excluded.
 - [OCaml](ocaml/measure-build.py): remove Dune's `_build` and disable shared caching;
   generate codecs, compile application OCaml/C modules and link. Compiler/opam
   dependencies and the common native SQLite engine remain prebuilt. SQLite engine
@@ -148,10 +167,14 @@ Release binary size is the artifact's on-disk size in MiB (2²⁰ bytes), measur
 with `-trimpath -ldflags='-s -w'`; OCaml uses Dune's release `-O3` profile followed
 by macOS `strip` and ad-hoc signing; Rust uses its release `strip=true` profile.
 Kotlin uses `shadowJar` on OpenJDK 26.0.2.1.
+The GraalVM executable is stripped and ad-hoc signed after compilation.
 
 - Go's **10.12 MiB executable includes statically linked SQLite**.
 - Kotlin's **17.57 MiB runnable fat JAR includes dependencies and native SQLite**;
   the separately installed JDK 26 is excluded.
+- Kotlin GraalVM's **94.16 MiB executable includes SQLite and Netty native
+  resources**, plus a **0.07 MiB `libmanagement_ext.dylib`** runtime library:
+  **94.23 MiB combined**, with no separately installed JDK required.
 - OCaml's **4.60 MiB executable requires the 1.62 MiB shared SQLite library**,
   for **6.22 MiB combined**.
 - Rust's **1.70 MiB executable requires the same 1.62 MiB shared SQLite library**,
@@ -184,7 +207,8 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | [Rust Actix (3 HTTP + 1 writer)](rust/) | 400.4K | 0.093ms | 12.3 MiB | 223% | 8.76ms | 44.47s | 1.25s |
-| Kotlin Vert.x | 373.6K | 0.097ms | 392.1 MiB | 282% | 1.209s | 18.21s | 1.30s |
+| Kotlin Vert.x (JVM) | 373.6K | 0.097ms | 392.1 MiB | 282% | 1.209s | 18.21s | 1.30s |
+| [Kotlin Vert.x (GraalVM)](kotlin/#optimized-graalvm-executable) | 302.7K | 0.133ms | 95.3 MiB | 340% | 653.69ms | 149.72s | 1.30s (JVM) |
 | Go Hertz | 297.9K | 0.151ms | 74.6 MiB | 348% | 9.52ms | 21.11s | 1.23s |
 | Zig http.zig | 264K | 0.2ms | — | — | — | — | — |
 | [Rust Actix (1 HTTP + 1 writer)](rust/) | 225.1K | 0.176ms | 11.5 MiB | 94% | 8.10ms | 44.47s | 1.25s |
@@ -209,6 +233,10 @@ RSS samples, logs and databases are in `results/ocaml-2026-09-17/` (gitignored).
 The equivalent Rust report is `rust/measurements.json`, with raw measurements in
 `results/rust-2026-09-18/` (both gitignored). Rust reproduction commands are in
 [its README](rust/README.md#reproduce-measurements).
+Kotlin GraalVM's raw samples, hashes, startup checks and database verification are
+in `results/kotlin-native-2026-09-18/`; its three clean-build logs and timings are
+in `results/kotlin-native-build-2026-09-18/` (gitignored).
+[Native reproduction commands](kotlin/README.md#optimized-graalvm-executable).
 After building all three applications and setting `JAVA_HOME` to JDK 26:
 
 ```sh

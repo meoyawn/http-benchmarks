@@ -2,6 +2,7 @@ version: 3
 
 vars:
   JAR: build/libs/kotlin-1.0-all.jar
+  NATIVE: build/native/nativeCompile/kotlin-bench
   UNIX_SOCKET: /tmp/benchmark.sock
   JAVA: '{{if .JAVA_HOME}}{{.JAVA_HOME}}/bin/java{{else}}java{{end}}'
 
@@ -15,6 +16,20 @@ tasks:
   build:
     run: once
     cmd: ./gradlew shadowJar
+
+  build-native:
+    run: once
+    cmd: ./gradlew -PjavaVersion=25 nativeCompile
+
+  start-native:
+    deps:
+      - build-native
+    cmd: '{{.NATIVE}} -Dhttp.socket={{.UNIX_SOCKET}}'
+
+  test-native:
+    deps:
+      - build-native
+    cmd: python3 verify-executable.py --native {{.NATIVE}}
 
   test:
     cmd: ./gradlew test
