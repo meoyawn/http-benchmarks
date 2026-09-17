@@ -242,20 +242,30 @@ row. The JNI result is noisier, but provides no reason to replace FFM here.
 
 ```fish
 python3 measure-build.py ../results/kotlin-build
+python3 ../measure-debug-build.py ../results/kotlin-debug-build --language kotlin
 ```
 
-This records three clean `clean shadowJar` builds and three incremental `shadowJar`
-builds. Each incremental sample changes a startup log string in `App.kt` in a
-disposable source copy, preserving the working tree and runnable artifact.
-Warm Gradle/Kotlin daemons, offline dependencies and `--no-build-cache` are used.
-Clean timing includes native SQLite C compilation, jextract, Kotlin/Java compilation
-and fat-JAR packaging; tests and downloads are excluded. The root tables report
-medians. Adding native compilation makes clean builds more expensive than the
-previous version that linked a preinstalled library.
+The first script supplies the **18.21s clean release** median from three
+`clean shadowJar` builds. This includes native SQLite C compilation, jextract,
+Kotlin/Java compilation and fat-JAR packaging. Its additional release rebuild
+samples are not used in the root tables.
 
-The measured medians are **18.21s clean** and
-**2.22s incremental**. Every sample is retained in the local generated
-`ocaml/measurements.json` report at the repository root (gitignored).
+The second script supplies the **1.30s warm debug rebuild** median, remeasured on
+2026-09-18 with **OpenJDK 26.0.2.1**. It runs
+`./gradlew --offline --no-build-cache -Pkotlin.incremental=true classes`, the
+compilation/resources prerequisite of `application run`. The task graph is checked
+with `run --dry-run`; no server starts and no JAR is packaged. JVM classes retain
+line-number and local-variable debug metadata, verified with `javap -c -l`.
+
+After an excluded warm-up and no-change control, each of three samples renames
+the public `NewPost` type and all consumers across five Kotlin files. Gradle and
+Kotlin daemons, incremental state, dependencies, generated bindings and native
+SQLite remain warm. Changed class hashes verify recompilation of the type and
+its callers. Both scripts use disposable source copies; tests, downloads, setup
+and source edits are excluded from timing. Debug samples, patches and task logs
+are in `results/debug-rebuild-2026-09-18/` at the repository root (gitignored).
+The earlier clean release samples remain in the local generated
+`ocaml/measurements.json` report.
 
 Tests cover the HTTP endpoints and validation, JSON escaping and invalid schemas,
 large strings and embedded NULs, case-insensitive user reuse and AUTOINCREMENT gaps,

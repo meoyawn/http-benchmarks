@@ -1,0 +1,45 @@
+version: 3
+
+vars:
+  SQLITE_LIBRARY: '.tools/sqlite/lib/libsqlite3.{{if eq OS "darwin"}}dylib{{else}}so{{end}}'
+
+tasks:
+  sqlite:
+    run: once
+    cmd: python3 ../db/prepare-sqlite.py --project . --prefix .tools/sqlite
+    sources:
+      - ../db/prepare-sqlite.py
+      - ../db/sqlite-config.json
+    generates:
+      - '{{.SQLITE_LIBRARY}}'
+      - '{{.SQLITE_LIBRARY}}.build.json'
+      - .tools/sqlite/include/sqlite3.h
+
+  build:
+    run: once
+    deps:
+      - sqlite
+    cmd: cargo build --release --locked
+    sources:
+      - src/**/*
+      - Cargo.toml
+      - Cargo.lock
+      - build.rs
+      - rust-toolchain.toml
+      - .cargo/config.toml
+      - ../db/sqlite-config.json
+    generates:
+      - target/release/rust-benchmark
+
+  start:
+    deps:
+      - build
+    cmd: target/release/rust-benchmark
+
+  test:
+    deps:
+      - build
+    cmds:
+      - cargo test --release --locked
+      - python3 test-http.py
+      - python3 test-http.py --workers 3

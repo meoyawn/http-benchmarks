@@ -136,21 +136,28 @@ endpoints; the script records every sample, log, command and artifact hash.
 
 ```sh
 python3 measure-build.py ../results/go-build
+python3 ../measure-debug-build.py ../results/go-debug-build --language go
 ```
 
-The script measures three clean and three incremental `env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .`
-runs and reports median wall time. Dependencies are downloaded before timing.
-Each clean sample uses a separate empty `GOCACHE`, including compilation of the
+The first script supplies the **21.11s clean release** median using
+`env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .`.
+Each of three clean samples uses a separate empty `GOCACHE`, including compilation of the
 standard library, dependencies, bundled SQLite C source, application, and linking.
-Each incremental sample changes a startup log string with a warm cache, forcing
-application recompilation and relinking. Tests and dependency/toolchain downloads
-are excluded. The source edits happen in a disposable copy; neither the original
-source nor the user's Go cache is changed. This definition is more extensive than
-the Kotlin clean build, which keeps compiled dependency artifacts and warm daemons.
+Its additional release rebuild samples are not used in the root tables.
 
-The measured medians are **21.11s clean** and
-**1.38s incremental**. The local generated `ocaml/measurements.json` report
-at the repository root contains every sample (gitignored).
+The second script supplies the **1.23s warm debug rebuild** median, remeasured on
+2026-09-18. After an excluded warm-up and no-change control, each of three samples
+renames the exported `NewPost` type in `main.go` and its consumers in `store.go`.
+It runs `go build -gcflags='all=-N -l' -o bench-debug .`, disabling Go optimizations
+and inlining while retaining debug information. The warm cache retains dependencies
+and optimized SQLite C; the application is recompiled and linked. Changed binary
+hashes confirm that every sample rebuilt.
+
+Both scripts use disposable source copies and separate caches. Tests, downloads,
+setup and source edits are excluded from timing. Raw debug rebuild samples and
+patches are in `results/debug-rebuild-2026-09-18/` at the repository root
+(gitignored); the earlier clean release samples are in the local generated
+`ocaml/measurements.json` report.
 
 ## Why these libraries
 

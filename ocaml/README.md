@@ -82,12 +82,21 @@ workers add coordination around SQLite's one writer. CPU is whole-process CPU
 time divided by wall time; **100% is one core**. Every HTTP domain reported a
 nonzero request count. These results replace the old single-event-loop Lwt rows.
 
-Clean build: **1.12s**; source-edit incremental build:
-**0.584s** (three-run medians). All domain counts use
-the same artifact. Clean removes Dune's `_build`, disables shared caching, generates
+Clean release build: **1.12s**; warm incremental debug rebuild:
+**0.521s** (three-run medians). All domain counts share build timings.
+Clean removes Dune's `_build`, disables shared caching, generates
 codecs, compiles application OCaml/C modules and links. Compiler, opam dependencies
 and the common native SQLite engine remain prebuilt. Toolchain setup, SQLite engine
 compilation, tests and environment resolution are excluded.
+
+Debug rebuilds were remeasured on 2026-09-18 with `dune build --profile dev`, using
+the **pkgx** toolchain wrapper and the pinned Flambda switch. An initial build and
+no-change control warm the disposable project before timing. Each sample renames
+the public `Model.new_post` type, its ATD schema declaration and consumers in other
+files. Dune regenerates codecs, recompiles affected modules with `-g`/`-opaque`
+and links the executable, without release `-O3`. Binary hashes verify every rebuild.
+Source edits and output checks are outside timing. Samples, patches and compiler
+commands are in `results/debug-rebuild-2026-09-18/` at the repository root (gitignored).
 
 Startup is the median of five fresh processes per domain count, from native
 executable launch to its post-bind listening log. It includes SQLite setup and
@@ -129,6 +138,7 @@ python3 ocaml/measure-comparison.py results/comparison --ocaml-domains 1 2 4 8
 python3 ocaml/measure-scaling.py results/ocaml-scaling --domains 1 2 4 8
 python3 ocaml/measure-startup.py results/ocaml-startup --domains 1
 python3 ocaml/measure-build.py results/ocaml-build
+python3 measure-debug-build.py results/ocaml-debug-build --language ocaml
 ```
 
 The first command reproduces the published rotating comparison; the second is an
