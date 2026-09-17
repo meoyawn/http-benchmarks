@@ -72,6 +72,10 @@ class AppTest {
 
         val post = requireNotNull(res.body())
         assertThat(post.content).isEqualTo(np.content)
+        assertThat(post.id).isPositive()
+        assertThat(post.user_id).isPositive()
+        assertThat(post.created_at).isPositive()
+        assertThat(post.updated_at).isEqualTo(post.created_at)
         Arena.ofConfined().use { arena ->
             SQLite3Conn.open(arena, dbPath).use { conn ->
                 conn.prepare("SELECT content FROM posts WHERE id IS ?").use { stmt ->

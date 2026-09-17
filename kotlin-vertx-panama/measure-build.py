@@ -18,7 +18,7 @@ def main():
     project = Path(__file__).resolve().parent
     source = project / "src/main/kotlin/bench/App.kt"
     original = source.read_bytes()
-    marker = b"logger.log(System.Logger.Level.INFO, uds)"
+    marker = b'logger.log(System.Logger.Level.INFO, "Listening on $uds")'
     assert original.count(marker) == 1, "Cannot locate startup log to change"
     command = ["./gradlew", "--offline", "--no-build-cache", "--console=plain"]
 
@@ -55,7 +55,7 @@ def main():
         "incremental": incremental,
         "clean_median": statistics.median(clean),
         "incremental_median": statistics.median(incremental),
-        "includes": "Gradle startup/configuration, compilation and fat JAR packaging; clean also regenerates FFM bindings",
+        "includes": "Gradle startup/configuration, compilation and fat JAR packaging; clean also compiles bundled SQLite C and regenerates FFM bindings",
         "excludes": "Dependency downloads and tests; Gradle/Kotlin daemons are warm; build cache is disabled",
         "source_edit": "Change the startup log string in App.kt, then restore it",
     }

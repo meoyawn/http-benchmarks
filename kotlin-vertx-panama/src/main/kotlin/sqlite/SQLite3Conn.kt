@@ -21,6 +21,10 @@ import org.sqlite.sqlite3_h.sqlite3_column_int
 import org.sqlite.sqlite3_h.sqlite3_column_int64
 import org.sqlite.sqlite3_h.sqlite3_column_name
 import org.sqlite.sqlite3_h.sqlite3_column_text
+import org.sqlite.sqlite3_h.sqlite3_column_bytes
+import org.sqlite.sqlite3_h.sqlite3_clear_bindings
+import java.lang.foreign.ValueLayout
+import java.nio.charset.StandardCharsets.UTF_8
 import org.sqlite.sqlite3_h.sqlite3_column_type
 import org.sqlite.sqlite3_h.sqlite3_errmsg
 import org.sqlite.sqlite3_h.sqlite3_exec
@@ -97,13 +101,14 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
         require(args.size == parameterCount) { "Expected $parameterCount arguments, got ${args.size}" }
 
         return Arena.ofConfined().use { arena ->
-            args.forEachIndexed { index, arg -> bind(arena, index = index + 1, arg = arg) }
-
             try {
+                args.forEachIndexed { index, arg -> bind(arena, index = index + 1, arg = arg) }
                 stepFn(this)
             } finally {
+                // Reset also reports the previous step error. Do not hide that error,
+                // and always clear SQLITE_STATIC pointers before closing the arena.
                 sqlite3_reset(stmt)
-                    .ok(conn)
+                sqlite3_clear_bindings(stmt).ok(conn)
             }
         }
     }
@@ -169,7 +174,7 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
         sqlite3_column_int64(stmt, colIndex(i))
 
     fun getString(i: @Range(from = 0, to = 32768) Int): String =
-        sqlite3_column_text(stmt, colIndex(i)).getString(0)
+        String(sqlite3_column_text(stmt, colIndex(i)).reinterpret(sqlite3_column_bytes(stmt, i).toLong()).toArray(ValueLayout.JAVA_BYTE), UTF_8)
 
     fun getDouble(i: @Range(from = 0, to = 32768) Int): Double =
         sqlite3_column_double(stmt, colIndex(i))
@@ -209,7 +214,7 @@ class Statement(val conn: MemorySegment, val stmt: MemorySegment) : AutoCloseabl
             Int::class.java -> sqlite3_column_int(stmt, columnIdx)
             Long::class.java -> sqlite3_column_int64(stmt, columnIdx)
             Double::class.java -> sqlite3_column_double(stmt, columnIdx)
-            String::class.java -> sqlite3_column_text(stmt, columnIdx).getString(0)
+            String::class.java -> getString(columnIdx)
             Boolean::class.java -> sqlite3_column_int(stmt, columnIdx) != 0
             else -> throw IllegalArgumentException("Unsupported $ctr arg $name: ${p.type}")
         }
@@ -254,6 +259,7 @@ class SQLite3Conn private constructor(private val arena: Arena, private val conn
 
     companion object {
         fun open(arena: Arena, path: Path): SQLite3Conn {
+            SQLiteRuntime.initialize()
             val conn = arena.ptrPtr {
                 sqlite3_open(arena.allocateFrom(path.absolutePathString()), it)
                     .ok(it.get(C_POINTER, 0))
@@ -263,6 +269,7 @@ class SQLite3Conn private constructor(private val arena: Arena, private val conn
         }
 
         fun openMemory(arena: Arena): SQLite3Conn {
+            SQLiteRuntime.initialize()
             val conn = arena.ptrPtr {
                 sqlite3_open(arena.allocateFrom(":memory:"), it)
                     .ok(it.get(C_POINTER, 0))
