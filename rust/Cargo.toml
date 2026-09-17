@@ -1,0 +1,25 @@
+[package]
+edition = "2024"
+name = "rust-benchmark"
+version = "0.1.0"
+
+[dependencies]
+actix-web = { version = "4.15.0", default-features = false, features = ["macros"] }
+rusqlite = { version = "0.40.2", default-features = false, features = ["modern_sqlite"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = { version = "1", default-features = false, features = ["std", "perf"] }
+crossbeam-channel = "0.5"
+self_cell = "1"
+mimalloc = "0.1.52"
+tokio = { version = "1", features = ["sync"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,0 +1,6 @@
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+[env]
+SQLITE3_LIB_DIR = { value = ".tools/sqlite/lib", relative = true, force = true }
+SQLITE3_INCLUDE_DIR = { value = ".tools/sqlite/include", relative = true, force = true }
