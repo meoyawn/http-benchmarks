@@ -5,6 +5,8 @@ import argparse
 import json
 from pathlib import Path
 import statistics
+import shutil
+import tempfile
 import subprocess
 import time
 
@@ -15,7 +17,22 @@ def main():
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    project = Path(__file__).resolve().parent
+    original_project = Path(__file__).resolve().parent
+    with tempfile.TemporaryDirectory(prefix="kotlin-build-") as temporary:
+        project = Path(temporary) / "kotlin-vertx-panama"
+        project.mkdir()
+        shutil.copytree(original_project.parent / "db", project.parent / "db")
+        for name in ("src", "gradle"):
+            shutil.copytree(original_project / name, project / name)
+        for name in ("build.gradle", "settings.gradle", "gradle.properties", "gradlew", "prepare-sqlite.py"):
+            shutil.copy2(original_project / name, project / name)
+        cache = ".tools/sqlite-amalgamation-3530400"
+        shutil.copytree(original_project / cache, project / cache)
+        shutil.copy2(original_project / (cache + ".zip"), project / (cache + ".zip"))
+        measure(project, output)
+
+
+def measure(project, output):
     source = project / "src/main/kotlin/bench/App.kt"
     original = source.read_bytes()
     marker = b'logger.log(System.Logger.Level.INFO, "Listening on $uds")'
@@ -43,8 +60,6 @@ def main():
             incremental.append(build(f"incremental-{i}", "shadowJar"))
     finally:
         source.write_bytes(original)
-        # The runnable artifact must match the restored source, even after failure.
-        build("restore", "shadowJar")
 
     result = {
         "unit": "seconds",
@@ -56,8 +71,8 @@ def main():
         "clean_median": statistics.median(clean),
         "incremental_median": statistics.median(incremental),
         "includes": "Gradle startup/configuration, compilation and fat JAR packaging; clean also compiles bundled SQLite C and regenerates FFM bindings",
-        "excludes": "Dependency downloads and tests; Gradle/Kotlin daemons are warm; build cache is disabled",
-        "source_edit": "Change the startup log string in App.kt, then restore it",
+        "excludes": "Dependency downloads, tests and source copying; Gradle/Kotlin daemons are warm; build cache is disabled",
+        "source_edit": "Change the startup log string in App.kt in a disposable source copy; original source and runnable artifact are untouched",
     }
     (output / "build-times.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))

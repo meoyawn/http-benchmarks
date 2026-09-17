@@ -18,7 +18,7 @@ def nativeLibrary = layout.buildDirectory.file("native/${nativeOs}-${nativeArch}
 def generatedBindings = layout.buildDirectory.dir('generated/sources/jextract')
 
 tasks.register('prepareSqlite', Exec) {
-    inputs.file('prepare-sqlite.py')
+    inputs.files('prepare-sqlite.py', '../db/prepare-sqlite.py', '../db/sqlite-config.json')
     outputs.dir(sqliteSource)
     commandLine 'python3', 'prepare-sqlite.py', '--prepare-only'
     if (gradle.startParameter.offline) args '--offline'
@@ -26,7 +26,7 @@ tasks.register('prepareSqlite', Exec) {
 
 tasks.register('buildSqlite', Exec) {
     dependsOn 'prepareSqlite'
-    inputs.files(sqliteSource.file('sqlite3.c'), sqliteSource.file('sqlite3.h'), 'prepare-sqlite.py')
+    inputs.files(sqliteSource.file('sqlite3.c'), sqliteSource.file('sqlite3.h'), 'prepare-sqlite.py', '../db/prepare-sqlite.py', '../db/sqlite-config.json')
     inputs.property('compiler', providers.environmentVariable('CC').orElse('cc'))
     inputs.property('platform', "${nativeOs}-${nativeArch}")
     outputs.file(nativeLibrary)

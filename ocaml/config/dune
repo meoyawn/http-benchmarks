@@ -1,0 +1,4 @@
+(rule
+ (targets link_flags.sexp c_flags.sexp)
+ (deps (env_var PKG_CONFIG_PATH))
+ (action (run python3 %{dep:link_flags.py})))

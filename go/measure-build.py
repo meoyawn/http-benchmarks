@@ -21,7 +21,7 @@ def main():
     project = Path(__file__).resolve().parent
     # Resolve dependencies once outside the timed interval.
     subprocess.run(["go", "mod", "download"], cwd=project, check=True)
-    env = dict(os.environ, GOPROXY="off", GOSUMDB="off", GOTOOLCHAIN="local")
+    env = dict(os.environ, GOPROXY="off", GOSUMDB="off", GOTOOLCHAIN="local", CGO_CFLAGS="-O3 -DNDEBUG")
     command = ["go", "build", "-trimpath", "-o", "bench", "."]
 
     def build(label, directory, cache):
@@ -55,7 +55,7 @@ def main():
             source.write_text(original.replace(marker, f'"Listening on %s (SQLite %s), build timing {i}"'))
             incremental.append(build(f"incremental-{i}", copy, cache))
     result = {
-        "unit": "seconds", "command": command,
+        "unit": "seconds", "command": command, "CGO_CFLAGS": env["CGO_CFLAGS"],
         "go_version": subprocess.check_output(["go", "version"], text=True).strip(),
         "clean": clean, "incremental": incremental,
         "clean_median": statistics.median(clean), "incremental_median": statistics.median(incremental),

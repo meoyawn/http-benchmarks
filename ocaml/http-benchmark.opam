@@ -1,0 +1,20 @@
+opam-version: "2.0"
+name: "http-benchmark"
+version: "0.1"
+synopsis: "HTTP over UDS, JSON and SQLite benchmark"
+maintainer: "http-benchmarks contributors"
+authors: "http-benchmarks contributors"
+homepage: "https://github.com/meoyawn/http-benchmarks"
+bug-reports: "https://github.com/meoyawn/http-benchmarks/issues"
+build: [ ["dune" "build" "--profile" "release" "bin/bench.exe"] ]
+depends: [
+  "ocaml" {= "5.5.1"}
+  "dune" {= "3.24.2"}
+  "cohttp-eio" {= "6.3.0"}
+  "eio_main" {= "1.5"}
+  "yojson" {= "3.0.0"}
+  "atdgen" {= "4.2.0" & build}
+  "atdgen-runtime" {= "4.2.0"}
+  "sqlite3" {= "5.4.2"}
+  "re" {= "1.14.0"}
+]

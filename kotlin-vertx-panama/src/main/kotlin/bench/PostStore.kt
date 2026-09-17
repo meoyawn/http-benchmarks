@@ -36,7 +36,8 @@ class PostStore(path: Path) : AutoCloseable {
             db = out.get(C_POINTER, 0)
             check(rc)
             script("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; " +
-                "PRAGMA busy_timeout=10000; PRAGMA optimize=0x10002;")
+                "PRAGMA busy_timeout=10000; PRAGMA cache_size=-2000; PRAGMA wal_autocheckpoint=1000; " +
+                "PRAGMA temp_store=MEMORY; PRAGMA mmap_size=0; PRAGMA optimize=0x10002;")
             begin = prepare("BEGIN IMMEDIATE")
             user = prepare("INSERT OR IGNORE INTO users (email) VALUES (?)")
             post = prepare("INSERT INTO posts (content, user_id) SELECT ?, id FROM users WHERE email IS ? " +

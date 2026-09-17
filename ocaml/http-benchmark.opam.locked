@@ -1,0 +1,97 @@
+opam-version: "2.0"
+name: "http-benchmark"
+version: "0.1"
+synopsis: "HTTP over UDS, JSON and SQLite benchmark"
+maintainer: "http-benchmarks contributors"
+authors: "http-benchmarks contributors"
+homepage: "https://github.com/meoyawn/http-benchmarks"
+bug-reports: "https://github.com/meoyawn/http-benchmarks/issues"
+depends: [
+  "angstrom" {= "0.16.1"}
+  "astring" {= "0.8.5"}
+  "atd" {= "4.2.0"}
+  "atdgen" {= "4.2.0"}
+  "atdgen-runtime" {= "4.2.0"}
+  "base" {= "v0.17.3"}
+  "base-bigarray" {= "base"}
+  "base-bytes" {= "base"}
+  "base-domains" {= "base"}
+  "base-effects" {= "base"}
+  "base-nnp" {= "base"}
+  "base-threads" {= "base"}
+  "base-unix" {= "base"}
+  "base64" {= "3.5.2"}
+  "bigstringaf" {= "0.10.0"}
+  "biniou" {= "1.2.2"}
+  "camlp-streams" {= "5.0.1"}
+  "cmdliner" {= "2.1.1"}
+  "cohttp" {= "6.3.0"}
+  "cohttp-eio" {= "6.3.0"}
+  "compiler-cloning" {= "enabled"}
+  "conf-pkg-config" {= "5"}
+  "conf-sqlite3" {= "1"}
+  "cppo" {= "1.8.0"}
+  "csexp" {= "1.5.2"}
+  "cstruct" {= "6.3.0"}
+  "domain-local-await" {= "1.0.1"}
+  "domain-name" {= "0.5.0"}
+  "dune" {= "3.24.2"}
+  "dune-compiledb" {= "0.6.0"}
+  "dune-configurator" {= "3.24.2"}
+  "easy-format" {= "1.3.4"}
+  "eio" {= "1.5"}
+  "eio_main" {= "1.5"}
+  "eio_posix" {= "1.5"}
+  "ezjsonm" {= "1.3.0"}
+  "fmt" {= "0.11.0"}
+  "fpath" {= "0.7.3"}
+  "hex" {= "1.5.0"}
+  "hmap" {= "0.8.1"}
+  "http" {= "6.3.0"}
+  "iomux" {= "0.4"}
+  "ipaddr" {= "5.6.2"}
+  "jsonm" {= "1.0.2"}
+  "logs" {= "0.10.0"}
+  "lwt" {= "6.1.2"}
+  "lwt-dllist" {= "1.1.0"}
+  "macaddr" {= "5.6.2"}
+  "menhir" {= "20260209"}
+  "menhirCST" {= "20260209"}
+  "menhirGLR" {= "20260209"}
+  "menhirLib" {= "20260209"}
+  "menhirSdk" {= "20260209"}
+  "mtime" {= "2.2.0"}
+  "num" {= "1.6"}
+  "ocaml" {= "5.5.1"}
+  "ocaml-compiler" {= "5.5.1"}
+  "ocaml-compiler-libs" {= "v0.17.0"}
+  "ocaml-option-flambda" {= "1"}
+  "ocaml-syntax-shims" {= "1.0.0"}
+  "ocaml-variants" {= "5.5.1+options"}
+  "ocaml_intrinsics_kernel" {= "v0.17.2"}
+  "ocamlbuild" {= "0.16.1"}
+  "ocamlfind" {= "1.9.9~preview"}
+  "ocplib-endian" {= "1.2"}
+  "optint" {= "0.3.0"}
+  "parsexp" {= "v0.17.0"}
+  "ppx_derivers" {= "1.2.1"}
+  "ppx_sexp_conv" {= "v0.17.1"}
+  "ppxlib" {= "0.38.0"}
+  "ppxlib_jane" {= "v0.17.4"}
+  "psq" {= "0.2.1"}
+  "ptime" {= "1.2.0"}
+  "re" {= "1.14.0"}
+  "seq" {= "base"}
+  "sexplib" {= "v0.17.0"}
+  "sexplib0" {= "v0.17.0"}
+  "sqlite3" {= "5.4.2"}
+  "stdlib-shims" {= "0.3.0"}
+  "stringext" {= "1.6.0"}
+  "thread-table" {= "1.0.0"}
+  "topkg" {= "1.1.1"}
+  "uri" {= "4.4.0"}
+  "uri-sexp" {= "4.4.0"}
+  "uutf" {= "1.0.4"}
+  "yojson" {= "3.0.0"}
+]
+build: ["dune" "build" "--profile" "release" "bin/bench.exe"]

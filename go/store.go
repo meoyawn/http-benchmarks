@@ -50,6 +50,10 @@ func openStore(path string) (_ *postStore, err error) {
 PRAGMA synchronous=NORMAL;
 PRAGMA foreign_keys=ON;
 PRAGMA busy_timeout=10000;
+PRAGMA cache_size=-2000;
+PRAGMA wal_autocheckpoint=1000;
+PRAGMA temp_store=MEMORY;
+PRAGMA mmap_size=0;
 PRAGMA optimize=0x10002;`); err != nil {
 		return nil, err
 	}

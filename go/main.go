@@ -6,9 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/mail"
 	"os"
 	"os/signal"
+	"regexp"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -34,10 +34,11 @@ type Post struct {
 	UpdatedAt int64  `json:"updated_at"`
 }
 
+var emailPattern = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
+
 func validate(p NewPost) []string {
 	var errs []string
-	address, err := mail.ParseAddress(p.Email)
-	if err != nil || address.Address != p.Email {
+	if !emailPattern.MatchString(p.Email) {
 		errs = append(errs, fmt.Sprintf("email: invalid address %q", p.Email))
 	}
 	if p.Content == "" {

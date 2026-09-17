@@ -1,0 +1,18 @@
+(rule
+ (targets request_t.ml request_t.mli)
+ (deps request.atd)
+ (action (run atdgen -t %{deps})))
+
+(rule
+ (targets request_j.ml request_j.mli)
+ (deps request.atd)
+ (action (run atdgen -j -j-defaults %{deps})))
+
+(library
+ (name bench_core)
+ (wrapped false)
+ (foreign_stubs
+  (language c)
+  (names sqlite_config_stubs)
+  (flags (:standard (:include ../config/c_flags.sexp))))
+ (libraries sqlite3 yojson atdgen-runtime re threads))

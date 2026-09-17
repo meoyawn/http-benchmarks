@@ -10,7 +10,6 @@ import io.vertx.core.net.SocketAddress
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import io.vertx.ext.web.handler.BodyHandler
-import io.vertx.json.schema.impl.Format
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
 import io.vertx.sqlclient.Pool
@@ -32,12 +31,15 @@ data class Post(
     val updated_at: Long,
 )
 
+private val emailPattern = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""")
+internal fun validEmail(email: String): Boolean = emailPattern.matches(email)
+
 private fun NewPost.validate(): List<String> {
     val errs = ArrayList<String>(2)
     if (content.isEmpty()) {
         errs.add("content: must not be empty")
     }
-    if (!Format.fastFormat("email", email)) {
+    if (!validEmail(email)) {
         errs.add("email: invalid: $email")
     }
     return errs
