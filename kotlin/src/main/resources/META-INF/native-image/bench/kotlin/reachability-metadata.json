@@ -1,0 +1,629 @@
+{
+  "reflection": [
+    {
+      "type": "bench.NewPost",
+      "allDeclaredConstructors": true,
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "bench.Post",
+      "allDeclaredConstructors": true,
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "byte[]",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.bootstrap.ServerBootstrap$1"
+    },
+    {
+      "type": "io.netty.bootstrap.ServerBootstrap$ServerBootstrapAcceptor"
+    },
+    {
+      "type": "io.netty.buffer.AbstractByteBufAllocator"
+    },
+    {
+      "type": "io.netty.buffer.AdaptivePoolingAllocator$Magazine"
+    },
+    {
+      "type": "io.netty.buffer.AdaptivePoolingAllocator$SizeClassedChunk"
+    },
+    {
+      "type": "io.netty.channel.AbstractChannelHandlerContext"
+    },
+    {
+      "type": "io.netty.channel.ChannelException",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.ChannelOutboundBuffer"
+    },
+    {
+      "type": "io.netty.channel.DefaultChannelConfig"
+    },
+    {
+      "type": "io.netty.channel.DefaultChannelPipeline"
+    },
+    {
+      "type": "io.netty.channel.DefaultChannelPipeline$HeadContext"
+    },
+    {
+      "type": "io.netty.channel.DefaultChannelPipeline$TailContext"
+    },
+    {
+      "type": "io.netty.channel.DefaultFileRegion",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "file"
+        },
+        {
+          "name": "transferred"
+        }
+      ]
+    },
+    {
+      "type": "io.netty.channel.kqueue.BsdSocket",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.kqueue.KQueueEventArray",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.kqueue.KQueueIoHandler"
+    },
+    {
+      "type": "io.netty.channel.kqueue.KQueueStaticallyReferencedJniMethods",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.kqueue.Native",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.unix.Buffer",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.unix.DatagramSocketAddress",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "byte[]",
+            "int",
+            "int",
+            "int",
+            "io.netty.channel.unix.DatagramSocketAddress"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.netty.channel.unix.DomainDatagramSocketAddress",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "byte[]",
+            "int",
+            "io.netty.channel.unix.DomainDatagramSocketAddress"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.netty.channel.unix.ErrorsStaticallyReferencedJniMethods",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.unix.FileDescriptor",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.unix.LimitsStaticallyReferencedJniMethods",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.channel.unix.PeerCredentials",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "int",
+            "int",
+            "int[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.netty.channel.unix.Socket",
+      "jniAccessible": true
+    },
+    {
+      "type": "io.netty.handler.codec.haproxy.HAProxyMessageDecoder"
+    },
+    {
+      "type": "io.netty.handler.codec.http.websocketx.extensions.WebSocketServerExtensionHandler"
+    },
+    {
+      "type": "io.netty.resolver.dns.Cache$Entries"
+    },
+    {
+      "type": "io.netty.resolver.dns.macos.DnsResolver",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "byte[][]",
+            "int",
+            "java.lang.String[]",
+            "java.lang.String",
+            "int",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.netty.resolver.dns.macos.DnsResolver[]"
+    },
+    {
+      "type": "io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.netty.util.DefaultAttributeMap"
+    },
+    {
+      "type": "io.netty.util.Recycler$DefaultHandle"
+    },
+    {
+      "type": "io.netty.util.ReferenceCountUtil"
+    },
+    {
+      "type": "io.netty.util.concurrent.ConcurrentSkipListIntObjMultimap"
+    },
+    {
+      "type": "io.netty.util.concurrent.ConcurrentSkipListIntObjMultimap$Index"
+    },
+    {
+      "type": "io.netty.util.concurrent.ConcurrentSkipListIntObjMultimap$Node"
+    },
+    {
+      "type": "io.netty.util.concurrent.DefaultPromise"
+    },
+    {
+      "type": "io.netty.util.concurrent.MpscIntQueue$MpscAtomicIntegerArrayQueue"
+    },
+    {
+      "type": "io.netty.util.concurrent.SingleThreadEventExecutor"
+    },
+    {
+      "type": "io.netty.util.internal.NativeLibraryUtil",
+      "methods": [
+        {
+          "name": "loadLibrary",
+          "parameterTypes": [
+            "java.lang.String",
+            "boolean"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.netty.util.internal.shaded.org.jctools.queues.varhandle.BaseMpscLinkedVarHandleArrayQueueColdProducerFields",
+      "fields": [
+        {
+          "name": "producerLimit"
+        }
+      ]
+    },
+    {
+      "type": "io.netty.util.internal.shaded.org.jctools.queues.varhandle.BaseMpscLinkedVarHandleArrayQueueConsumerFields",
+      "fields": [
+        {
+          "name": "consumerIndex"
+        }
+      ]
+    },
+    {
+      "type": "io.netty.util.internal.shaded.org.jctools.queues.varhandle.BaseMpscLinkedVarHandleArrayQueueProducerFields",
+      "fields": [
+        {
+          "name": "producerIndex"
+        }
+      ]
+    },
+    {
+      "type": "io.netty.util.internal.shaded.org.jctools.queues.varhandle.MpmcVarHandleArrayQueueConsumerIndexField",
+      "fields": [
+        {
+          "name": "consumerIndex"
+        }
+      ]
+    },
+    {
+      "type": "io.netty.util.internal.shaded.org.jctools.queues.varhandle.MpmcVarHandleArrayQueueProducerIndexField",
+      "fields": [
+        {
+          "name": "producerIndex"
+        }
+      ]
+    },
+    {
+      "type": "io.vertx.config.impl.spi.DirectoryConfigStoreFactory"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.EnvVariablesConfigStoreFactory"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.EventBusConfigStoreFactory"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.FileConfigStoreFactory"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.HttpConfigStoreFactory"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.JsonConfigStoreFactory"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.JsonProcessor"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.PropertiesConfigProcessor"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.RawProcessor"
+    },
+    {
+      "type": "io.vertx.config.impl.spi.SystemPropertiesConfigStoreFactory"
+    },
+    {
+      "type": "io.vertx.core.eventbus.impl.EventBusImpl"
+    },
+    {
+      "type": "io.vertx.core.http.impl.http1.VertxHttpRequestDecoder"
+    },
+    {
+      "type": "io.vertx.core.http.impl.http1.VertxHttpResponseEncoder"
+    },
+    {
+      "type": "io.vertx.core.http.impl.http2.codec.Http1xUpgradeToH2CHandler"
+    },
+    {
+      "type": "io.vertx.core.http.impl.tcp.HttpServerConnectionInitializer$1"
+    },
+    {
+      "type": "io.vertx.core.impl.VertxImpl$InternalTimerHandler",
+      "fields": [
+        {
+          "name": "disposed"
+        }
+      ]
+    },
+    {
+      "type": "io.vertx.core.internal.concurrent.InboundMessageQueue"
+    },
+    {
+      "type": "io.vertx.core.logging.Log4j2LogDelegateFactory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.vertx.core.logging.SLF4JLogDelegateFactory"
+    },
+    {
+      "type": "io.vertx.core.net.impl.VertxHandler"
+    },
+    {
+      "type": "io.vertx.core.net.impl.tcp.ServerChannelLoadBalancer"
+    },
+    {
+      "type": "io.vertx.core.streams.impl.MessagePassingQueue$MpSc"
+    },
+    {
+      "type": "io.vertx.ext.web.impl.RoutingContextImplBase"
+    },
+    {
+      "type": "io.vertx.sqlclient.impl.TransactionPropagationLocal"
+    },
+    {
+      "type": "java.io.FileDescriptor",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "fd"
+        }
+      ]
+    },
+    {
+      "type": "java.io.IOException",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.lang.Boolean",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getBoolean",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.OutOfMemoryError",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.lang.RuntimeException",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.net.InetSocketAddress",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.net.PortUnreachableException",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.nio.Buffer",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "limit"
+        },
+        {
+          "name": "position"
+        }
+      ],
+      "methods": [
+        {
+          "name": "limit",
+          "parameterTypes": []
+        },
+        {
+          "name": "position",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.channels.ClosedChannelException",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "kotlinx.coroutines.CancellableContinuationImpl"
+    },
+    {
+      "type": "kotlinx.coroutines.CompletedExceptionally"
+    },
+    {
+      "type": "kotlinx.coroutines.EventLoopImplBase"
+    },
+    {
+      "type": "kotlinx.coroutines.JobSupport"
+    },
+    {
+      "type": "kotlinx.coroutines.JobSupport$Finishing"
+    },
+    {
+      "type": "kotlinx.coroutines.internal.DispatchedContinuation"
+    },
+    {
+      "type": "kotlinx.coroutines.internal.LockFreeLinkedListNode"
+    },
+    {
+      "type": "kotlinx.coroutines.internal.LockFreeTaskQueue"
+    },
+    {
+      "type": "kotlinx.coroutines.internal.LockFreeTaskQueueCore"
+    },
+    {
+      "type": "kotlinx.coroutines.scheduling.CoroutineScheduler"
+    },
+    {
+      "type": "sun.management.VMManagementImpl",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "compTimeMonitoringSupport"
+        },
+        {
+          "name": "currentThreadCpuTimeSupport"
+        },
+        {
+          "name": "objectMonitorUsageSupport"
+        },
+        {
+          "name": "otherThreadCpuTimeSupport"
+        },
+        {
+          "name": "remoteDiagnosticCommandsSupport"
+        },
+        {
+          "name": "synchronizerUsageSupport"
+        },
+        {
+          "name": "threadAllocatedMemorySupport"
+        },
+        {
+          "name": "threadContentionMonitoringSupport"
+        }
+      ]
+    },
+    {
+      "type": "sun.nio.ch.FileChannelImpl",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "fd"
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "glob": "native/**"
+    },
+    {
+      "glob": "META-INF/native/**"
+    },
+    {
+      "glob": "META-INF/services/**"
+    }
+  ],
+  "foreign": {
+    "downcalls": [
+      {
+        "returnType": "int",
+        "parameterTypes": []
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "void*"
+        ]
+      },
+      {
+        "returnType": "void*",
+        "parameterTypes": [
+          "void*"
+        ]
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "void*",
+          "void*",
+          "int",
+          "void*"
+        ]
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "void*",
+          "void*",
+          "void*",
+          "void*",
+          "void*"
+        ]
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "void*",
+          "void*",
+          "int",
+          "int",
+          "void*",
+          "void*"
+        ]
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "void*",
+          "int",
+          "void*",
+          "int",
+          "void*"
+        ]
+      },
+      {
+        "returnType": "long long",
+        "parameterTypes": [
+          "void*",
+          "int"
+        ]
+      },
+      {
+        "returnType": "void*",
+        "parameterTypes": [
+          "void*",
+          "int"
+        ]
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "void*",
+          "int"
+        ]
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "int",
+          "int"
+        ],
+        "options": {
+          "firstVariadicArg": 1
+        }
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "int",
+          "void*"
+        ],
+        "options": {
+          "firstVariadicArg": 1
+        }
+      },
+      {
+        "returnType": "int",
+        "parameterTypes": [
+          "int",
+          "void*",
+          "int",
+          "int"
+        ],
+        "options": {
+          "firstVariadicArg": 1
+        }
+      }
+    ]
+  }
+}

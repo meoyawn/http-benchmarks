@@ -92,6 +92,91 @@ Stop with Ctrl-C or SIGTERM to close the HTTP server and drain the writer queue.
 The optional PostgreSQL path remains available with `-Ddb.backend=postgres`;
 it was not benchmarked in this update.
 
+### Optimized GraalVM executable
+
+`shadowJar` / `task build` retain the optimized JDK 26 fat-JAR build. The separate
+`nativeCompile` / `task build-native` target uses **Oracle GraalVM 25.3.4.1**
+(JDK **25.0.4.1**) and Native Build Tools **1.1.13**. GraalVM's current release
+line uses JDK 25, selected with `-PjavaVersion=25`; the default remains 26.
+Install [GraalVM](https://www.graalvm.org/downloads/) for your platform, then:
+
+```fish
+set -gx JAVA_HOME /absolute/path/to/graalvm/Contents/Home # macOS
+set -gx GRAALVM_HOME $JAVA_HOME
+set -gx JEXTRACT_HOME "$PWD/.tools/jextract-25"
+./gradlew -PjavaVersion=25 nativeCompile
+python3 verify-executable.py --native build/native/nativeCompile/kotlin-bench
+
+# Uses the same already migrated database and system-property overrides as the JAR.
+build/native/nativeCompile/kotlin-bench -Dhttp.socket=/tmp/benchmark.sock
+```
+
+On Linux, `JAVA_HOME` is the extracted GraalVM directory itself. The build enables
+`-O3`, `-march=native` and FFM native access, with no JVM fallback. Host-CPU targeting
+means the executable is intended for the build CPU or a compatible CPU. It embeds
+the same SQLite library and Netty native transport resources as the JAR; no JDK
+is required to run it. Distribute the executable together with any adjacent
+GraalVM runtime libraries (`libmanagement_ext.dylib` on the measured macOS ARM64
+build). The executable is stripped and ad-hoc signed on macOS.
+The native Linux and PostgreSQL paths have not been validated here.
+
+The checked-in reachability metadata registers the SQLite FFM call signatures,
+including the three variadic `sqlite3_config` forms, JSON model reflection and
+native resources. Dependency metadata comes from the GraalVM metadata repository.
+Netty/Vert.x reflection and JNI registrations were collected with the GraalVM
+tracing agent while running `verify-executable.py` on the JDK 25 fat JAR; they
+supplement dependency metadata, including kqueue's native entry points.
+fastjson2 2.0.65 remains the codec for both artifacts. Its upstream build-time
+initialization captures private JDK String lambdas that GraalVM cannot compile;
+the native build instead initializes fastjson2 at runtime so its fallback paths
+can run. This setting does not change the JVM build.
+
+To return to the JDK 26 fat JAR, reset `JAVA_HOME` to JDK 26 and run
+`./gradlew test shadowJar`. `task start` runs the JAR; `task start-native` runs the
+native executable. `task test-native` builds and checks the packaged native server.
+
+The measured macOS ARM64 toolchain archive is
+[`graalvm-jdk-25i3-25.0.4.1_macos-aarch64_bin.tar.gz`](https://gds.oracle.com/download/graal/25i3/archive/graalvm-jdk-25i3-25.0.4.1_macos-aarch64_bin.tar.gz),
+SHA-256 `8411c28344f47726c433a2fbf0fa399c199531802d458a917d4a05b106043141`.
+
+Reproduce native measurements with GraalVM selected as above:
+
+```fish
+# Resolve dependencies/metadata online once before timing offline clean builds.
+./gradlew -PjavaVersion=25 nativeCompile
+python3 measure-build.py ../results/kotlin-native-build --native
+python3 verify-executable.py --native build/native/nativeCompile/kotlin-bench
+python3 measure-native.py ../results/kotlin-native
+```
+
+The build runner warms compilation, then measures three `clean nativeCompile`
+builds in this project and leaves the last optimized executable in `build/`.
+No source edits occur in native mode. The HTTP runner uses three fresh processes
+and databases, each with 10 seconds of `/posts` followed by 10 seconds of `/echo`,
+50 connections and no HTTP warm-up. It also measures five fresh starts to the
+first post-bind listening log and verifies echo after each startup timer stops.
+RPS, p50, CPU and startup are medians; RSS is the maximum 100 ms sample.
+Its report includes artifact/source hashes, exact executable and runtime-library
+sizes, database validation, raw oha output, server logs and per-run metrics.
+Use fresh result directories. The retained JVM development build supplies the
+`1.30s (JVM)` debug-rebuild cell; native-image incremental rebuilds were not timed.
+
+Measured on **2026-09-18**, the optimized native executable achieves **9.1K writes/sec**
+and **302.7K echo RPS**, with median p50 **5.038 / 0.133ms**, peak sampled RSS
+**110.5 / 95.3 MiB** and CPU **116% / 340%** respectively. The five-start median is
+**653.69ms**. Clean builds took **145.46, 149.72 and 158.63 seconds**, a **149.72s**
+median. The stripped executable is **98,732,016 bytes (94.16 MiB)**; the adjacent
+runtime library is **73,984 bytes**, making **94.23 MiB** combined.
+
+Native startup and sampled RSS improve on the retained JVM measurements, while
+throughput is lower, especially for writes. The native write bottleneck has not
+been profiled. No JVM numbers were substituted for native release measurements.
+The packaged checks pass echo, JSON/schema/email validation, Unicode/NUL/large
+strings, committed responses, case-insensitive user reuse, forced rollback and
+recovery, concurrent writes, shutdown, integrity and AUTOINCREMENT accounting.
+Raw results are in `results/kotlin-native-2026-09-18/` and
+`results/kotlin-native-build-2026-09-18/` at the repository root (gitignored).
+
 ## Bundled SQLite
 
 [Tailscale compiles its bundled SQLite C source into each Go target binary](https://github.com/tailscale/sqlite/blob/acbe2dadf94c/cgosqlite/cgosqlite.go).
@@ -261,8 +346,9 @@ After an excluded warm-up and no-change control, each of three samples renames
 the public `NewPost` type and all consumers across five Kotlin files. Gradle and
 Kotlin daemons, incremental state, dependencies, generated bindings and native
 SQLite remain warm. Changed class hashes verify recompilation of the type and
-its callers. Both scripts use disposable source copies; tests, downloads, setup
-and source edits are excluded from timing. Debug samples, patches and task logs
+its callers. The JVM build and debug runners use disposable source copies; tests, downloads,
+setup and source edits are excluded from timing. The separate native clean-build
+mode builds in this project without source edits. Debug samples, patches and task logs
 are in `results/debug-rebuild-2026-09-18/` at the repository root (gitignored).
 The earlier clean release samples remain in the local generated
 `ocaml/measurements.json` report.

@@ -2,6 +2,7 @@ plugins {
     id 'org.jetbrains.kotlin.jvm' version '2.4.20'
     id 'application'
     id "com.gradleup.shadow" version "9.6.1"
+    id 'org.graalvm.buildtools.native' version '1.1.13'
     id "io.github.ben-manes.versions" version "0.64.0"
     id "idea"
 }
@@ -9,6 +10,8 @@ plugins {
 group = 'bench'
 version = '1.0'
 
+// GraalVM's current release line uses JDK 25; the JVM build stays on JDK 26.
+def javaVersion = providers.gradleProperty('javaVersion').map { it.toInteger() }.getOrElse(26)
 def jextractHome = providers.environmentVariable('JEXTRACT_HOME')
 def sqliteSource = layout.projectDirectory.dir('.tools/sqlite-amalgamation-3530400')
 def nativeOs = System.getProperty('os.name') == 'Mac OS X' ? 'macos' : 'linux'
@@ -113,19 +116,19 @@ test {
     if (libraryOverride != null) systemProperty 'sqlite.library', libraryOverride
     jvmArgs application.applicationDefaultJvmArgs
     javaLauncher = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(26)
+        languageVersion = JavaLanguageVersion.of(javaVersion)
     }
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_26
-    targetCompatibility = JavaVersion.VERSION_26
+    sourceCompatibility = JavaVersion.toVersion(javaVersion)
+    targetCompatibility = JavaVersion.toVersion(javaVersion)
 }
 
 kotlin {
-    jvmToolchain(26)
+    jvmToolchain(javaVersion)
     compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_26
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(javaVersion.toString())
         /**
          * https://kotlinlang.org/docs/gradle-compiler-options.html#example-of-additional-arguments-usage-via-freecompilerargs
          * https://kotlinlang.org/docs/compiler-reference.html#java-parameters
@@ -146,6 +149,38 @@ shadowJar {
     mergeServiceFiles()
     preserveFileTimestamps = false
     reproducibleFileOrder = true
+}
+
+graalvmNative {
+    toolchainDetection = false
+    metadataRepository {
+        enabled = true
+        version = '1.0.14'
+    }
+    binaries {
+        main {
+            imageName = 'kotlin-bench'
+            fallback = false
+            buildArgs.addAll('-O3', '-march=native', '--enable-native-access=ALL-UNNAMED')
+            // fastjson2 2.0.65's build-time String lambdas cannot be captured by
+            // Native Image. Let its supported runtime fallbacks initialize there.
+            excludeConfig.put('com.alibaba.fastjson2:fastjson2:2.0.65',
+                ['^/META-INF/native-image/.*native-image.properties$'])
+            buildArgs.add('--initialize-at-run-time=com.alibaba.fastjson2')
+        }
+    }
+}
+
+tasks.named('nativeCompile') {
+    doLast {
+        def binary = layout.buildDirectory.file('native/nativeCompile/kotlin-bench').get().asFile
+        providers.exec { commandLine 'strip', binary.absolutePath }.result.get().assertNormalExitValue()
+        if (nativeOs == 'macos') {
+            providers.exec {
+                commandLine 'codesign', '--force', '--sign', '-', binary.absolutePath
+            }.result.get().assertNormalExitValue()
+        }
+    }
 }
 
 dependencyUpdates {
