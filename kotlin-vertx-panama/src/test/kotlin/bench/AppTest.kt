@@ -17,6 +17,10 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import java.lang.foreign.Arena
+import java.nio.file.Files
+import java.nio.file.Path
+import sqlite.SQLite3Conn
 
 private fun Vertx.test(f: suspend CoroutineScope.(Vertx) -> Unit): Unit =
     runBlocking(dispatcher()) { f(this@test) }
@@ -24,6 +28,8 @@ private fun Vertx.test(f: suspend CoroutineScope.(Vertx) -> Unit): Unit =
 class AppTest {
 
     private companion object {
+        val dbDir = Files.createTempDirectory("vertx-panama-test")
+        val dbPath = dbDir.resolve("test.sqlite")
         val vertx = Vertx.vertx(VertxOptions().setPreferNativeTransport(true))!!
         val addr = SocketAddress.domainSocketAddress("/tmp/${System.currentTimeMillis().toString(radix = 36)}.sock")!!
         val client = WebClient.create(vertx)!!
@@ -31,17 +37,25 @@ class AppTest {
         @JvmStatic
         @BeforeAll
         fun beforeAll(): Unit = runBlocking {
+            Arena.ofConfined().use { arena ->
+                SQLite3Conn.open(arena, dbPath).use { conn ->
+                    conn.exec(Files.readString(Path.of("../db/migrations/001_init.up.sql")))
+                }
+            }
             vertx.deployVerticle(
                 App(),
                 DeploymentOptions()
-                    .setConfig(JsonObject(mapOf("http.socket" to addr.path())))
+                    .setConfig(JsonObject(mapOf("http.socket" to addr.path(), "db.path" to dbPath.toString())))
             ).coAwait()
         }
 
         @JvmStatic
         @AfterAll
-        fun afterAll() {
-            vertx.close()
+        fun afterAll(): Unit = runBlocking {
+            vertx.close().coAwait()
+            Files.deleteIfExists(Path.of(addr.path()))
+            Files.list(dbDir).use { files -> files.forEach { Files.delete(it) } }
+            Files.delete(dbDir)
         }
     }
 
@@ -56,7 +70,26 @@ class AppTest {
             .expecting(HttpResponseExpectation.JSON)
             .coAwait()
 
-        assertThat(res.body().content).isEqualTo(np.content)
+        val post = requireNotNull(res.body())
+        assertThat(post.content).isEqualTo(np.content)
+        Arena.ofConfined().use { arena ->
+            SQLite3Conn.open(arena, dbPath).use { conn ->
+                conn.prepare("SELECT content FROM posts WHERE id IS ?").use { stmt ->
+                    assertThat(stmt.queryFirst(arrayOf(post.id)) { it.getString(0) })
+                        .isEqualTo(np.content)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun invalidPost() = vertx.test {
+        val res = client.request(HttpMethod.POST, addr, "/posts")
+            .sendJson(NewPost(email = "invalid", content = ""))
+            .coAwait()
+
+        assertThat(res.statusCode()).isEqualTo(400)
+        assertThat(requireNotNull(res.bodyAsJsonArray()).size()).isEqualTo(2)
     }
 
     @Test

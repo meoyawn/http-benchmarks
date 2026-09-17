@@ -43,3 +43,5 @@ bin/
 
 gen/
 .task/
+
+.tools/

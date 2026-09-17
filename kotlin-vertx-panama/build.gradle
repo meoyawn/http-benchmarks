@@ -1,31 +1,43 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '2.1.10'
+    id 'org.jetbrains.kotlin.jvm' version '2.4.20'
     id 'application'
-    id "com.github.johnrengelman.shadow" version "8.1.1"
-    id "com.github.ben-manes.versions" version "0.52.0"
+    id "com.gradleup.shadow" version "9.6.1"
+    id "io.github.ben-manes.versions" version "0.64.0"
     id "idea"
 }
 
 group = 'bench'
 version = '1.0'
 
-sourceSets {
-    main {
-        java.srcDirs += file("gen/main/java/")
-    }
+def sqliteHome = providers.environmentVariable('SQLITE3_HOME').orElse(
+    System.getProperty('os.name') == 'Mac OS X' ? '/opt/homebrew/opt/sqlite' : '/usr'
+)
+def jextractHome = providers.environmentVariable('JEXTRACT_HOME')
+def sqliteLibraryDir = sqliteHome.map { "${it}/lib" }
+def generatedBindings = layout.buildDirectory.dir('generated/sources/jextract')
+
+tasks.register('generateSqliteBindings', Exec) {
+    def header = sqliteHome.map { "${it}/include/sqlite3.h" }
+    inputs.file(header)
+    inputs.file('build.gradle')
+    inputs.property('jextractHome', jextractHome.orElse('PATH'))
+    outputs.dir(generatedBindings)
+    executable = jextractHome.map { "${it}/bin/jextract" }.getOrElse('jextract')
+    args header.get(), '-l', 'sqlite3', '--use-system-load-library', '--target-package', 'org.sqlite',
+        '--output', generatedBindings.get().asFile.absolutePath
 }
 
-idea {
-    module {
-        generatedSourceDirs += file("gen/main/java/")
-    }
-}
+sourceSets.main.java.srcDir(generatedBindings)
+idea.module.generatedSourceDirs += generatedBindings.get().asFile
+
+tasks.named('compileKotlin') { dependsOn 'generateSqliteBindings' }
+tasks.named('compileJava') { dependsOn 'generateSqliteBindings' }
 
 application {
     mainClass = "bench.Main"
     applicationDefaultJvmArgs.addAll(
         "--enable-native-access=ALL-UNNAMED",
-        "-Djava.library.path=./sqlite3"
+        "-Djava.library.path=${sqliteLibraryDir.get()}"
     )
 }
 
@@ -35,14 +47,15 @@ repositories {
 
 dependencies {
     implementation(
-        "org.jetbrains.kotlin:kotlin-stdlib:2.1.10",
-        "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1",
+        "org.jetbrains.kotlin:kotlin-stdlib",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0",
     )
 
-    implementation 'com.fasterxml.jackson.module:jackson-module-parameter-names:2.18.2'
+    implementation platform('com.fasterxml.jackson:jackson-bom:2.22.2')
+    implementation 'com.fasterxml.jackson.module:jackson-module-parameter-names:2.22.2'
 
     implementation(
-        platform("io.vertx:vertx-dependencies:4.5.12"),
+        platform("io.vertx:vertx-dependencies:5.1.8"),
         "io.vertx:vertx-config",
         "io.vertx:vertx-lang-kotlin-coroutines",
         "io.vertx:vertx-web",
@@ -51,27 +64,40 @@ dependencies {
 
         // pg
         "io.vertx:vertx-pg-client",
-        'com.ongres.scram:client:2.1',
     )
     if (System.getProperty('os.name') == 'Mac OS X' && System.getProperty('os.arch') == 'aarch64') {
         implementation(
-            'io.netty:netty-resolver-dns-native-macos:4.1.117.Final:osx-aarch_64',
-            'io.netty:netty-transport-native-kqueue:4.1.117.Final:osx-aarch_64',
+            'io.netty:netty-resolver-dns-native-macos::osx-aarch_64',
+            'io.netty:netty-transport-native-kqueue::osx-aarch_64',
         )
     }
 
+    testImplementation platform('org.junit:junit-bom:6.1.3')
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation(
+        'org.junit.jupiter:junit-jupiter',
         'org.jetbrains.kotlin:kotlin-test',
-        'org.assertj:assertj-core:3.27.3',
+        'org.assertj:assertj-core:3.27.7',
     )
 }
 
 test {
     useJUnitPlatform()
+    jvmArgs application.applicationDefaultJvmArgs
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(26)
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_26
+    targetCompatibility = JavaVersion.VERSION_26
 }
 
 kotlin {
+    jvmToolchain(26)
     compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_26
         /**
          * https://kotlinlang.org/docs/gradle-compiler-options.html#example-of-additional-arguments-usage-via-freecompilerargs
          * https://kotlinlang.org/docs/compiler-reference.html#java-parameters
@@ -86,6 +112,9 @@ kotlin {
 }
 
 shadowJar {
+    filesMatching(['META-INF/services/**', 'META-INF/*.kotlin_module']) {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
     mergeServiceFiles()
     preserveFileTimestamps = false
     reproducibleFileOrder = true
@@ -93,17 +122,9 @@ shadowJar {
 
 dependencyUpdates {
     checkConstraints = true
+    gradleReleaseChannel = 'current'
 
     rejectVersionIf {
-        final version = it.candidate.version.toLowerCase()
-
-        [
-            "m", // milestone
-            "alpha",
-            "beta",
-            "eap",
-            "rc",
-            "cr",
-        ].any { version.contains(it) }
+        it.candidate.version =~ /(?i)(alpha|beta|eap|rc|cr|snapshot|(?:^|[.-])m\d)/
     }
 }
