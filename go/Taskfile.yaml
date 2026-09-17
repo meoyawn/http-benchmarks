@@ -1,0 +1,20 @@
+version: 3
+
+tasks:
+  build:
+    run: once
+    cmd: go build -trimpath -o bench .
+
+  start:
+    deps: [build]
+    cmd: ./bench {{.CLI_ARGS}}
+
+  test:
+    cmd: go test -race ./...
+
+  measure-build:
+    cmd: python3 measure-build.py {{.CLI_ARGS | default "../results/go-build"}}
+
+  benchmark:
+    deps: [build]
+    cmd: python3 measure-http.py {{.CLI_ARGS | default "../results/go-http"}}
