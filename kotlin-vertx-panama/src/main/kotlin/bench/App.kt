@@ -4,18 +4,19 @@ import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule
 import insertPost
 import insertUser
-import io.vertx.core.impl.logging.LoggerFactory
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.net.SocketAddress
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import io.vertx.ext.web.handler.BodyHandler
-import io.vertx.json.schema.common.RegularExpressions
+import io.vertx.json.schema.impl.Format
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
 import io.vertx.sqlclient.Pool
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -48,7 +49,7 @@ private fun NewPost.validate(): List<String> {
     if (content.isEmpty()) {
         errs.add("content: must not be empty")
     }
-    if (!RegularExpressions.EMAIL.matcher(email).matches()) {
+    if (!Format.fastFormat("email", email)) {
         errs.add("email: invalid: $email")
     }
     return errs
@@ -77,7 +78,7 @@ private inline fun CoroutineScope.coHandler(route: Route, crossinline fn: suspen
     }
 
 private suspend fun RoutingContext.postSQLite(db: SendChannel<Call<NewPost, Post>>) {
-    val body = body().asPojo(NewPost::class.java)
+    val body = requireNotNull(body().asPojo(NewPost::class.java))
 
     val errs = body.validate()
     if (errs.isNotEmpty()) {
@@ -91,7 +92,7 @@ private suspend fun RoutingContext.postSQLite(db: SendChannel<Call<NewPost, Post
     json(post)
 }
 
-private suspend fun sqliteWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost, Post>>): Unit =
+private suspend fun sqliteWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost, Post>>, ready: CompletableDeferred<Unit>): Unit =
     Arena.ofConfined().use { arena ->
         SQLite3Conn.open(arena, dbPath).use { conn ->
             conn.exec(
@@ -107,6 +108,8 @@ private suspend fun sqliteWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost
                 """
             )
 
+            ready.complete(Unit)
+
             for ((req, res) in chan) {
                 val post = conn.transact(SQLite3Conn.TxMode.IMMEDIATE) {
                     insertUser(req.email)
@@ -121,7 +124,7 @@ private suspend fun sqliteWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost
     }
 
 private suspend fun RoutingContext.postPG(pg: Pool) {
-    val body = body().asPojo(NewPost::class.java)
+    val body = requireNotNull(body().asPojo(NewPost::class.java))
 
     val errs = body.validate()
     if (errs.isNotEmpty()) {
@@ -142,7 +145,7 @@ private suspend fun RoutingContext.postPG(pg: Pool) {
 class App : CoroutineVerticle() {
 
     private companion object {
-        val logger = LoggerFactory.getLogger(App::class.java)!!
+        val logger = System.getLogger(App::class.java.name)
 
         init {
             DatabindCodec.mapper()
@@ -152,13 +155,25 @@ class App : CoroutineVerticle() {
     }
 
     private val writeSQLiteChan = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
-    private lateinit var pg: Pool
+    private var pg: Pool? = null
+    private val sqliteDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private var sqliteJob: Job? = null
 
     override suspend fun start() {
-        pg = mkPG(vertx)
-
-        launch(Executors.newSingleThreadExecutor().asCoroutineDispatcher()) {
-            sqliteWriter(Path.of("../db/db.sqlite"), writeSQLiteChan)
+        val usePostgres = config.getString("db.backend", "sqlite") == "postgres"
+        if (usePostgres) {
+            pg = mkPG(vertx)
+        } else {
+            val ready = CompletableDeferred<Unit>()
+            sqliteJob = launch(sqliteDispatcher) {
+                try {
+                    sqliteWriter(Path.of(config.getString("db.path", "../db/db.sqlite")), writeSQLiteChan, ready)
+                } catch (e: Exception) {
+                    ready.completeExceptionally(e)
+                    throw e
+                }
+            }
+            ready.await()
         }
 
         val router = Router.router(vertx).apply {
@@ -170,9 +185,11 @@ class App : CoroutineVerticle() {
                 it.json(body)
             }
 
-           coHandler(post("/posts")) { postSQLite(writeSQLiteChan) }
-
-            // coHandler(post("/posts")) { postPG(pg) }
+            if (usePostgres) {
+                coHandler(post("/posts")) { postPG(requireNotNull(pg)) }
+            } else {
+                coHandler(post("/posts")) { postSQLite(writeSQLiteChan) }
+            }
         }
 
         val uds = config.getString("http.socket", "/tmp/benchmark.sock")
@@ -182,13 +199,15 @@ class App : CoroutineVerticle() {
             .listen(SocketAddress.domainSocketAddress(uds))
             .coAwait()
 
-        logger.info(uds)
+        logger.log(System.Logger.Level.INFO, uds)
     }
 
     override suspend fun stop() {
         // closes database
         writeSQLiteChan.close()
 
-        pg.close().coAwait()
+        sqliteJob?.join()
+        sqliteDispatcher.close()
+        pg?.close()?.coAwait()
     }
 }

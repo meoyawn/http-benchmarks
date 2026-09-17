@@ -53,6 +53,34 @@ class SQLite3ConnTest {
     }
 
     @Test
+    fun textBindingExcludesTerminator(): Unit = Arena.ofConfined().use { arena ->
+        SQLite3Conn.openMemory(arena).use { conn ->
+            conn.prepare("SELECT hex(?)").use { stmt ->
+                assertThat(stmt.queryFirst(arrayOf("hé🙂")) { it.getString(0) })
+                    .isEqualTo("68C3A9F09F9982")
+                assertThat(stmt.queryFirst(arrayOf("")) { it.getString(0) })
+                    .isEmpty()
+            }
+        }
+    }
+
+    @Test
+    fun rollback(): Unit = Arena.ofConfined().use { arena ->
+        SQLite3Conn.openMemory(arena).use { conn ->
+            conn.exec("CREATE TABLE test (value INTEGER NOT NULL) STRICT")
+            assertThatThrownBy {
+                conn.transact(SQLite3Conn.TxMode.IMMEDIATE) {
+                    exec("INSERT INTO test VALUES (1)")
+                    error("rollback")
+                }
+            }.hasMessage("rollback")
+            conn.prepare("SELECT count(*) FROM test").use { stmt ->
+                assertThat(stmt.queryFirst { it.getLong(0) }).isZero()
+            }
+        }
+    }
+
+    @Test
     fun script(): Unit = Arena.ofConfined().use { arena ->
         SQLite3Conn.openMemory(arena).use { conn ->
             conn.exec(
