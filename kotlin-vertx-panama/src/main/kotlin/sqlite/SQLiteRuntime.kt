@@ -4,7 +4,7 @@ import org.sqlite.sqlite3_h.*
 import java.lang.foreign.ValueLayout
 import java.lang.foreign.Arena
 
-/** Configure once, before any connection opens. Mirrors Tailscale's MEMSTATUS setting. */
+/** Shared benchmark settings in db/sqlite-config.json, before any connection opens. */
 object SQLiteRuntime {
     init {
         NativeLibrary.load()

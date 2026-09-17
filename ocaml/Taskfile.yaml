@@ -1,0 +1,28 @@
+version: 3
+
+tasks:
+  setup:
+    cmd: ./setup.sh
+
+  build:
+    run: once
+    cmd: ./toolchain.sh exec -- dune build --profile release bin/bench.exe
+
+  start:
+    deps: [build]
+    cmd: ./_build/default/bin/bench.exe {{.CLI_ARGS}}
+
+  test:
+    deps: [build]
+    cmd: python3 test.py
+
+  benchmark:
+    deps: [build]
+    cmd: python3 measure-http.py {{.CLI_ARGS | default "../results/ocaml-http"}}
+
+  measure-startup:
+    deps: [build]
+    cmd: python3 measure-startup.py {{.CLI_ARGS | default "../results/ocaml-startup"}}
+
+  measure-build:
+    cmd: python3 measure-build.py {{.CLI_ARGS | default "../results/ocaml-build"}}

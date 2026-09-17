@@ -9,12 +9,19 @@ optimized SQLite build. Routing and body handling use Vert.x's application APIs.
 Four HTTP event loops share one SQLite writer thread and a bounded 1,024-request
 queue. Every transaction schedules its response immediately after commit.
 
-The shared schema, SQL, validation rules and returned fields are unchanged. Each
+The shared schema, SQL and returned fields are unchanged. Each
 request executes `BEGIN IMMEDIATE`, `INSERT OR IGNORE` for the user, the post insert
 with `RETURNING`, and `COMMIT`. This preserves SQLite's AUTOINCREMENT gaps on ignored
 user inserts. There is no transaction batching, response grouping or user/post
 cache. WAL, `synchronous=NORMAL`, foreign keys, the 10-second busy timeout and the
-default 1,000-page WAL autocheckpoint match Go.
+explicit 1,000-page WAL autocheckpoint match Go and OCaml. The
+[shared SQLite configuration](../db/README.md) also aligns compiler options, page
+pool, connection cache, temporary storage and mmap behavior.
+
+Email validation uses the same precompiled, whole-string ASCII regex as Go and
+OCaml: `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`. Content must be
+nonempty. The shared [validation examples](../testdata/email-validation.json)
+are checked by all three implementations.
 
 ## Versions
 
@@ -105,7 +112,9 @@ used Homebrew SQLite 3.53.4, not Apple's system SQLite. The new build uses SQLit
 [recommended compile options](https://sqlite.org/compile.html), including
 `THREADSAFE=2`, disabled memory-status accounting and explicit initialization.
 It retains the database features used by the shared schema. Exact flags and the
-source checksum are in [prepare-sqlite.py](prepare-sqlite.py).
+source checksum are in [the common configuration](../db/sqlite-config.json),
+built by [the shared helper](../db/prepare-sqlite.py). All three engines report
+identical SQLite compile options.
 
 A roughly 4 MiB process-wide [SQLite page-cache pool](https://sqlite.org/malloc.html)
 reduces allocator calls, with SQLite's normal allocation fallback when it fills.
@@ -117,27 +126,20 @@ the round trip. Failed writes reset statements and roll back before the next job
 
 ## HTTP throughput and RAM
 
-The [root tables](../README.md) report three alternating fresh-process runs of
-Kotlin and unchanged Go: 10 seconds per endpoint, 50 connections, `/posts` then
-`/echo`, no HTTP warm-up. Medians are **42.7K writes/sec** and **364.6K echo
-requests/sec** for Kotlin, versus **43.7K** and **288.0K** for Go. Kotlin's ranges
-were 41.5–44.6K and 333.3–372.1K. The write median is 2% below Go; echo is 27%
-faster. The historical 53K write result was not reproduced in these runs.
-
-Peak sampled RSS across these runs was **232.0 MiB** for writes and **316.7 MiB**
-for echo, versus Go's 71.8 and 73.1 MiB. RSS includes native memory, excludes oha,
-and is sampled with `ps` approximately every 100 ms. Echo follows writes in the
-same process, so it includes retained database memory. These are sampled peaks,
-not JVM heap sizes or exact kernel high-water marks.
-
-A fresh pre-optimization baseline in this session measured 39.7K writes/sec and
-164.1K echo requests/sec. The older root table contained 36.2K and 173.2K from a
-separate run; neither historical comparison isolates individual changes.
+The [root tables](../README.md) report three rotating fresh-process runs with Go
+and OCaml: 10 seconds per endpoint, 50 connections, `/posts` then `/echo`, no HTTP
+warm-up. Kotlin's medians are **44.5K writes/sec** and
+**373.6K echo RPS**, above the previous 42.7K / 364.6K.
+Peak sampled RSS is **225.3 / 392.1 MiB** respectively.
+RSS includes native memory and excludes oha, sampled approximately every 100 ms.
+Echo retains allocations from writes. The local generated `ocaml/measurements.json`
+report at the repository root contains all samples and integrity/content/foreign-key
+checks (gitignored).
 
 ```fish
 # Both application artifacts must be built before the comparison.
 ./gradlew shadowJar
-# In ../go: go build -trimpath -o bench .
+# In ../go: env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .
 python3 measure-comparison.py ../results/jvm-comparison
 
 # One Kotlin process, with a fresh database:
@@ -154,8 +156,8 @@ foreign keys after shutdown. Every final run passed.
 
 ## Binary startup
 
-The built JAR reached its first `Listening on…` log in a median **1.228s** across
-five fresh JVM processes (range 1.207–1.255s), alternating with Go. The marker is
+The built JAR reached its first `Listening on…` log in a median **1.209s**
+across five fresh JVM processes, alternating with Go. The marker is
 emitted after Vert.x successfully binds the socket. Timing includes JVM and native
 library loading, database initialization and listening, with builds and database
 migration excluded. There is no HTTP warm-up or filesystem cache flushing; an
@@ -243,19 +245,21 @@ python3 measure-build.py ../results/kotlin-build
 ```
 
 This records three clean `clean shadowJar` builds and three incremental `shadowJar`
-builds. Each incremental sample changes a startup log string in `App.kt`, then
-restores the source and runnable artifact. Run while nobody else edits that file.
+builds. Each incremental sample changes a startup log string in `App.kt` in a
+disposable source copy, preserving the working tree and runnable artifact.
 Warm Gradle/Kotlin daemons, offline dependencies and `--no-build-cache` are used.
 Clean timing includes native SQLite C compilation, jextract, Kotlin/Java compilation
 and fat-JAR packaging; tests and downloads are excluded. The root tables report
 medians. Adding native compilation makes clean builds more expensive than the
 previous version that linked a preinstalled library.
 
-The measured medians are **13.86s clean** (14.447s, 13.640s, 13.863s) and
-**2.01s incremental** (2.059s, 2.006s, 1.967s).
+The measured medians are **18.21s clean** and
+**2.22s incremental**. Every sample is retained in the local generated
+`ocaml/measurements.json` report at the repository root (gitignored).
 
 Tests cover the HTTP endpoints and validation, JSON escaping and invalid schemas,
 large strings and embedded NULs, case-insensitive user reuse and AUTOINCREMENT gaps,
 rollback/recovery, queued writes and orderly shutdown, and missing databases.
 Raw HTTP/RSS logs, JMH JSON and build timings from this update are saved locally
-under `results/jvm-optimization/` at the repository root (gitignored).
+under `results/jvm-optimization/`; the final shared-configuration measurements
+are under `results/ocaml-2026-09-17/` (both gitignored).

@@ -1,0 +1,11 @@
+(library
+ (name bench_eio)
+ (wrapped false)
+ (modules eio_server writer)
+ (libraries bench_core eio_main))
+
+(library
+ (name bench_cohttp)
+ (wrapped false)
+ (modules cohttp_adapter)
+ (libraries bench_core cohttp-eio eio_main))

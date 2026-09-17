@@ -1,0 +1,4 @@
+type new_post <ocaml predef module="Model"> = {
+  ~email <ocaml default="\"\"">: string;
+  ~content <ocaml default="\"\"">: string;
+}

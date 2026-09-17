@@ -39,7 +39,7 @@ shared migration.
 cd go
 go mod download
 go test -race ./...
-go build -trimpath -o bench .
+env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .
 
 # Once, for a fresh database; reuse an already migrated database as-is.
 sqlite3 -bail ../db/db.sqlite < ../db/migrations/001_init.up.sql
@@ -58,12 +58,18 @@ server drains requests before stopping the writer and closing SQLite. A missing
 database or migration fails startup before HTTP begins serving.
 
 SQLite uses WAL, `synchronous=NORMAL`, foreign keys, a 10-second busy timeout and
-the default 1,000-page WAL autocheckpoint. One writer goroutine reuses prepared
+the explicit 1,000-page WAL autocheckpoint. Its optimized compiler options, page
+pool, cache and temporary-storage settings match [Kotlin and OCaml](../db/README.md). One writer goroutine reuses prepared
 `BEGIN IMMEDIATE`, user insert, post insert with `RETURNING`, `COMMIT` and
 `ROLLBACK` statements. A bounded queue and pooled reply objects avoid allocating
 channels per request. Every request still performs its own two SQL writes and
 commit; there is no transaction batching or cache of users/posts. Failed writes
 reset statements and roll back before the next request.
+
+Email validation uses the same precompiled, whole-string ASCII regex as Kotlin
+and OCaml: `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`. Content must be
+nonempty. This deliberately simple rule replaces `net/mail.ParseAddress`;
+[shared test cases](../testdata/email-validation.json) keep all three aligned.
 
 Tests use temporary databases and actual Unix-socket HTTP connections. They cover
 JSON parsing and validation, response and persisted content (including embedded
@@ -73,10 +79,17 @@ failures.
 
 ## HTTP throughput and RAM
 
+The final three-run medians are **45.2K writes/sec** and
+**297.9K echo RPS**, measured in rotating order with Kotlin
+and OCaml under the shared SQLite configuration. Peak RSS is
+**73.3 / 74.6 MiB** respectively.
+See the [root tables](../README.md). Individual samples are retained locally in
+`ocaml/measurements.json` at the repository root (gitignored).
+
 With the server stopped, run from this directory:
 
 ```sh
-go build -trimpath -o bench .
+env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .
 python3 measure-http.py ../results/go-http
 ```
 
@@ -103,8 +116,8 @@ post contents and row counts are checked after a clean server exit.
 ## Binary startup
 
 Five fresh processes, alternating with Kotlin, reached Hertz's post-bind
-`HTTP server listening on address=…` log in a median **8.73ms**. The first launch
-took 441.1ms; the other four took 8.5–9.1ms. Filesystem caches were not flushed.
+`HTTP server listening on address=…` log in a median **9.52ms**.
+Filesystem caches were not flushed.
 The application's earlier `Listening on…` line precedes binding and is not used
 as the readiness marker. An echo request confirms readiness after timing ends.
 
@@ -125,7 +138,7 @@ endpoints; the script records every sample, log, command and artifact hash.
 python3 measure-build.py ../results/go-build
 ```
 
-The script measures three clean and three incremental `go build -trimpath -o bench .`
+The script measures three clean and three incremental `env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .`
 runs and reports median wall time. Dependencies are downloaded before timing.
 Each clean sample uses a separate empty `GOCACHE`, including compilation of the
 standard library, dependencies, bundled SQLite C source, application, and linking.
@@ -135,8 +148,9 @@ are excluded. The source edits happen in a disposable copy; neither the original
 source nor the user's Go cache is changed. This definition is more extensive than
 the Kotlin clean build, which keeps compiled dependency artifacts and warm daemons.
 
-The recorded medians are **22.31s clean** (24.292s, 22.313s, 22.119s) and **1.33s
-incremental** (1.918s, 1.333s, 1.320s).
+The measured medians are **21.11s clean** and
+**1.38s incremental**. The local generated `ocaml/measurements.json` report
+at the repository root contains every sample (gitignored).
 
 ## Why these libraries
 

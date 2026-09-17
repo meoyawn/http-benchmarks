@@ -3,7 +3,7 @@ version: 3
 tasks:
   build:
     run: once
-    cmd: go build -trimpath -o bench .
+    cmd: env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .
 
   start:
     deps: [build]

@@ -27,6 +27,61 @@ func must(t testing.TB, err error) {
 	}
 }
 
+func TestSharedEmailValidation(t *testing.T) {
+	data, err := os.ReadFile("../testdata/email-validation.json")
+	must(t, err)
+	var cases []struct {
+		Email string `json:"email"`
+		Valid bool   `json:"valid"`
+	}
+	must(t, json.Unmarshal(data, &cases))
+	for _, test := range cases {
+		if got := len(validate(NewPost{Email: test.Email, Content: "valid"})) == 0; got != test.Valid {
+			t.Errorf("email %q: got %v, want %v", test.Email, got, test.Valid)
+		}
+	}
+}
+
+func TestSharedSQLiteConfiguration(t *testing.T) {
+	data, err := os.ReadFile("../db/sqlite-config.json")
+	must(t, err)
+	var config struct {
+		Version string         `json:"version"`
+		Defines []string       `json:"defines"`
+		Pragmas map[string]any `json:"pragmas"`
+	}
+	must(t, json.Unmarshal(data, &config))
+	store := testStore(t)
+	if store.version != config.Version {
+		t.Fatalf("SQLite version %s, want %s", store.version, config.Version)
+	}
+	for name, expected := range config.Pragmas {
+		query(t, store, "PRAGMA "+name, func(stmt sqliteh.Stmt) {
+			if got := stmt.ColumnText(0); got != fmt.Sprint(expected) {
+				t.Errorf("SQLite %s: got %s, want %v", name, got, expected)
+			}
+		})
+	}
+	query(t, store, "SELECT json_group_array(compile_options) FROM pragma_compile_options", func(stmt sqliteh.Stmt) {
+		var options []string
+		must(t, json.Unmarshal([]byte(stmt.ColumnText(0)), &options))
+		actual := make(map[string]bool)
+		for _, option := range options {
+			actual[option] = true
+		}
+		for _, define := range config.Defines {
+			if !strings.HasPrefix(define, "SQLITE_") || define == "SQLITE_ENABLE_JSON1" {
+				continue // Platform defines and the obsolete JSON1 switch are not reported.
+			}
+			option := strings.TrimPrefix(define, "SQLITE_")
+			if !actual[option] && !actual[strings.TrimSuffix(option, "=1")] {
+				t.Errorf("SQLite compile option missing: %s", option)
+			}
+		}
+		t.Logf("SQLite compile options: %s", stmt.ColumnText(0))
+	})
+}
+
 func testDatabase(t testing.TB) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.sqlite")

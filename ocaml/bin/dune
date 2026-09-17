@@ -1,0 +1,4 @@
+(executable
+ (name bench)
+ (link_flags (:standard (:include ../config/link_flags.sexp)))
+ (libraries bench_core bench_eio bench_cohttp))

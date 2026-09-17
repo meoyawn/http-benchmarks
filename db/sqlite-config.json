@@ -1,0 +1,19 @@
+{
+  "version": "3.53.4",
+  "release": "sqlite-amalgamation-3530400",
+  "sha256": "1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d",
+  "cflags": ["-O3", "-DNDEBUG"],
+  "defines": [
+    "SQLITE_THREADSAFE=2", "SQLITE_DQS=0", "SQLITE_DEFAULT_MEMSTATUS=0",
+    "SQLITE_DEFAULT_WAL_SYNCHRONOUS=1", "SQLITE_LIKE_DOESNT_MATCH_BLOBS",
+    "SQLITE_MAX_EXPR_DEPTH=0", "SQLITE_OMIT_DEPRECATED", "SQLITE_OMIT_PROGRESS_CALLBACK",
+    "SQLITE_OMIT_SHARED_CACHE", "SQLITE_USE_ALLOCA", "SQLITE_OMIT_AUTOINIT",
+    "SQLITE_OMIT_LOAD_EXTENSION", "SQLITE_ENABLE_FTS5", "SQLITE_ENABLE_RTREE",
+    "SQLITE_ENABLE_JSON1", "SQLITE_ENABLE_SESSION", "SQLITE_ENABLE_SNAPSHOT",
+    "SQLITE_ENABLE_PREUPDATE_HOOK", "SQLITE_ENABLE_COLUMN_METADATA", "SQLITE_ENABLE_STAT4",
+    "SQLITE_ENABLE_DBSTAT_VTAB=1", "SQLITE_TEMP_STORE=1", "HAVE_USLEEP=1",
+    "_XOPEN_SOURCE=600", "_DARWIN_C_SOURCE=1"
+  ],
+  "runtime": {"memstatus": false, "pagecache_slots": 1024, "page_bytes": 4096, "connection_mutex": false},
+  "pragmas": {"journal_mode": "wal", "synchronous": 1, "foreign_keys": 1, "busy_timeout": 10000, "cache_size": -2000, "wal_autocheckpoint": 1000, "temp_store": 2, "mmap_size": 0}
+}
