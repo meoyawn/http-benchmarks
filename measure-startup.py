@@ -91,7 +91,7 @@ def main():
         parser.error("--rounds must be positive")
     artifacts = {
         "go": ROOT / "go/bench",
-        "kotlin": ROOT / "kotlin-vertx-panama/build/libs/kotlin-vertx-panama-1.0-all.jar",
+        "kotlin": ROOT / "kotlin/build/libs/kotlin-1.0-all.jar",
     }
     for artifact in artifacts.values():
         if not artifact.is_file():
@@ -119,7 +119,7 @@ def main():
                 command = [args.java, "-server", "-XX:+PerfDisableSharedMem", "--enable-native-access=ALL-UNNAMED",
                            f"-Ddb.path={database}", f"-Dhttp.socket={socket_path}", "-jar", str(artifacts[language])]
                 marker = f"Listening on {socket_path}".encode()
-                cwd = ROOT / "kotlin-vertx-panama"
+                cwd = ROOT / "kotlin"
             result = measure(command, marker, socket_path, directory, cwd)
             results[language].append(result)
             print(f"{language} {index + 1}: {result['launch_to_listening_ms']:.3f} ms", flush=True)

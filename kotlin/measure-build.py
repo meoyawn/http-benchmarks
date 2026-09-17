@@ -19,7 +19,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     original_project = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(prefix="kotlin-build-") as temporary:
-        project = Path(temporary) / "kotlin-vertx-panama"
+        project = Path(temporary) / "kotlin"
         project.mkdir()
         shutil.copytree(original_project.parent / "db", project.parent / "db")
         for name in ("src", "gradle"):

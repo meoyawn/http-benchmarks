@@ -43,7 +43,7 @@ Kotlin uses **OpenJDK 26.0.2.1**, **Kotlin 2.4.20**, **Vert.x Web 5.1.8**,
 **fastjson2 2.0.65** and Panama FFM, with four HTTP event loops and one writer.
 Go uses **1.27.1**, **Hertz 0.10.6 / netpoll 0.7.5**, **goccy/go-json 0.10.6**,
 and **Tailscale SQLite acbe2dadf94c**. Setup: [Go](go/README.md),
-[Kotlin](kotlin-vertx-panama/README.md), [OCaml](ocaml/README.md).
+[Kotlin](kotlin/README.md), [OCaml](ocaml/README.md).
 
 ```sh
 oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
@@ -61,7 +61,6 @@ Use `pkgx oha` if `oha` is not installed.
 | C# ASP.NET Core | 45K | 1ms | — | — | — | — | — |
 | Kotlin Vert.x SQLite Panama | 44.5K | 0.998ms | 225.3 MiB | 192% | 1.209s | 18.21s | 2.22s |
 | Zig http.zig | 43K | 1ms | — | — | — | — | — |
-| Kotlin Vert.x SQLite JNI | 40K | 1.1ms | — | — | — | — | — |
 | OCaml Cohttp/Eio (4 HTTP + 1 writer) | 35.1K | 1.298ms | 89.6 MiB | 261% | 10.00ms | 1.12s | 0.584s |
 | JS Bun Hono | 21K | 1.9ms | — | — | — | — | — |
 | Python Blacksheep | 19K | 2.5ms | — | — | — | — | — |
@@ -84,7 +83,7 @@ excluded. The clean definitions differ:
 - [Go](go/measure-build.py): a fresh `GOCACHE` per clean build compiles the standard
   library, dependencies, bundled SQLite C and application. Incremental builds
   retain the cache and recompile/relink the application. `CGO_CFLAGS=-O3 -DNDEBUG`.
-- [Kotlin](kotlin-vertx-panama/measure-build.py): warm Gradle/Kotlin daemons and
+- [Kotlin](kotlin/measure-build.py): warm Gradle/Kotlin daemons and
   offline dependencies, build cache disabled. `clean shadowJar` includes SQLite C
   compilation, jextract, Kotlin/Java compilation and JAR packaging.
 - [OCaml](ocaml/measure-build.py): remove Dune's `_build` and disable shared caching;

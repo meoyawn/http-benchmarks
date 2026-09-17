@@ -31,7 +31,7 @@ def main():
     if args.rounds < 1 or min(args.ocaml_domains) < 1 or len(set(args.ocaml_domains)) != len(args.ocaml_domains):
         parser.error("positive rounds and unique positive OCaml domain counts are required")
     artifacts = {"go": ROOT / "go/bench",
-                 "kotlin": ROOT / "kotlin-vertx-panama/build/libs/kotlin-vertx-panama-1.0-all.jar"}
+                 "kotlin": ROOT / "kotlin/build/libs/kotlin-1.0-all.jar"}
     artifacts.update({f"ocaml-{domains}": PROJECT / "_build/default/bin/bench.exe" for domains in args.ocaml_domains})
     sqlite_library = PROJECT / ".tools/sqlite/lib" / ("libsqlite3.dylib" if platform.system() == "Darwin" else "libsqlite3.so")
     sqlite_hash = hashlib.sha256(sqlite_library.read_bytes()).hexdigest()

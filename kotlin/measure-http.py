@@ -96,7 +96,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     parser.add_argument("--java", default=os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home") + "/bin/java")
-    parser.add_argument("--jar", type=Path, default=PROJECT / "build/libs/kotlin-vertx-panama-1.0-all.jar")
+    parser.add_argument("--jar", type=Path, default=PROJECT / "build/libs/kotlin-1.0-all.jar")
     parser.add_argument("--jvm-arg", action="append", default=[])
     parser.add_argument("--socket", type=Path, default=Path("/tmp/kotlin-benchmark.sock"))
     parser.add_argument("--oha", default="pkgx oha", help="load-generator command")
