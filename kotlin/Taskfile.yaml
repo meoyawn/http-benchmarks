@@ -1,7 +1,7 @@
 version: 3
 
 vars:
-  JAR: build/libs/kotlin-vertx-panama-1.0-all.jar
+  JAR: build/libs/kotlin-1.0-all.jar
   UNIX_SOCKET: /tmp/benchmark.sock
   JAVA: '{{if .JAVA_HOME}}{{.JAVA_HOME}}/bin/java{{else}}java{{end}}'
 

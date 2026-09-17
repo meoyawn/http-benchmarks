@@ -54,7 +54,7 @@ Requires JDK 26, jextract 25, Python 3 and a C compiler. On macOS Apple Silicon,
 with Homebrew OpenJDK 26 and Xcode Command Line Tools already installed, using fish:
 
 ```fish
-cd kotlin-vertx-panama
+cd kotlin
 set -gx JAVA_HOME (brew --prefix openjdk)/libexec/openjdk.jdk/Contents/Home
 set -gx JEXTRACT_HOME "$PWD/.tools/jextract-25"
 
@@ -81,7 +81,7 @@ Without Task, run from this directory:
 
 ```fish
 "$JAVA_HOME/bin/java" -server -XX:+PerfDisableSharedMem --enable-native-access=ALL-UNNAMED \
-  -Dhttp.socket=/tmp/benchmark.sock -jar build/libs/kotlin-vertx-panama-1.0-all.jar
+  -Dhttp.socket=/tmp/benchmark.sock -jar build/libs/kotlin-1.0-all.jar
 ```
 
 The default database is `../db/db.sqlite`. Override it with

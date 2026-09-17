@@ -26,7 +26,7 @@ def main():
     for i in range(args.rounds):
         for language in (("go", "kotlin") if i % 2 == 0 else ("kotlin", "go")):
             directory = output / f"{language}-{i+1}"
-            script = ROOT / ("go" if language == "go" else "kotlin-vertx-panama") / "measure-http.py"
+            script = ROOT / ("go" if language == "go" else "kotlin") / "measure-http.py"
             command = [sys.executable, str(script), str(directory), "--socket", f"/tmp/{language}-compare-{os.getpid()}.sock"]
             subprocess.run(command, check=True)
             commands.append(command)
