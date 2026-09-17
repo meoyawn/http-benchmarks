@@ -7,20 +7,36 @@ import io.vertx.core.Vertx
 import io.vertx.core.VertxOptions
 import io.vertx.kotlin.coroutines.coAwait
 import kotlinx.coroutines.runBlocking
+import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.Path
 
 object Main {
 
     @JvmStatic
     fun main(args: Array<String>): Unit = runBlocking {
-        val vertx = Vertx.vertx(VertxOptions().setPreferNativeTransport(true))
+        val workers = Integer.getInteger("http.workers", 4)
+        require(workers > 0) { "http.workers must be positive, got $workers" }
+        val vertx = Vertx.vertx(VertxOptions().setPreferNativeTransport(true).setEventLoopPoolSize(workers))
+        var writer: PostWriter? = null
+        try {
+            val retriever = ConfigRetriever.create(vertx, ConfigRetrieverOptions().setIncludeDefaultStores(true))
+            val config = try { retriever.config.coAwait() } finally { retriever.close() }
+            val socket = Path.of(config.getString("http.socket", "/tmp/benchmark.sock"))
+            require(!Files.exists(socket, NOFOLLOW_LINKS)) { "Socket path already exists: $socket" }
+            if (config.getString("db.backend", "sqlite") != "postgres") {
+                writer = PostWriter(Path.of(config.getString("db.path", "../db/db.sqlite")))
+            }
+            vertx.deployVerticle(java.util.function.Supplier { App(writer) },
+                DeploymentOptions().setInstances(workers).setConfig(config)).coAwait()
+        } catch (e: Exception) {
+            try { vertx.close().coAwait() } finally { writer?.close() }
+            throw e
+        }
         Runtime.getRuntime().addShutdownHook(Thread {
             runBlocking {
-                vertx.close().coAwait()
+                try { vertx.close().coAwait() } finally { writer?.close() }
             }
         })
-
-        val retriever = ConfigRetriever.create(vertx, ConfigRetrieverOptions().setIncludeDefaultStores(true))
-        val config = retriever.config.coAwait()
-        vertx.deployVerticle(App(), DeploymentOptions().setConfig(config)).coAwait()
     }
 }

@@ -2,11 +2,11 @@ package bench
 
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule
-import insertPost
-import insertUser
 import io.vertx.core.json.jackson.DatabindCodec
+import io.vertx.core.Vertx
+import io.vertx.core.buffer.Buffer
+import io.vertx.core.http.HttpServer
 import io.vertx.core.net.SocketAddress
-import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import io.vertx.ext.web.handler.BodyHandler
@@ -14,28 +14,16 @@ import io.vertx.json.schema.impl.Format
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
 import io.vertx.sqlclient.Pool
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
-import org.jetbrains.annotations.VisibleForTesting
-import sqlite.SQLite3Conn
-import java.lang.foreign.Arena
 import java.nio.file.Path
-import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
-@VisibleForTesting
 data class NewPost(
     val email: String,
     val content: String,
 )
 
 @Suppress("PropertyName")
-@VisibleForTesting
 data class Post(
     val id: Long,
     val user_id: Long,
@@ -54,74 +42,6 @@ private fun NewPost.validate(): List<String> {
     }
     return errs
 }
-
-private data class Call<T, R>(
-    val req: T,
-    val res: SendChannel<R>,
-)
-
-private suspend fun <T, R> SendChannel<Call<T, R>>.call(req: T): R {
-    val res = Channel<R>()
-    send(Call(req, res))
-    return res.receive()
-}
-
-private inline fun CoroutineScope.coHandler(route: Route, crossinline fn: suspend RoutingContext.() -> Unit): Route =
-    route.handler { ctx ->
-        launch {
-            try {
-                fn(ctx)
-            } catch (e: Exception) {
-                ctx.fail(500, e)
-            }
-        }
-    }
-
-private suspend fun RoutingContext.postSQLite(db: SendChannel<Call<NewPost, Post>>) {
-    val body = requireNotNull(body().asPojo(NewPost::class.java))
-
-    val errs = body.validate()
-    if (errs.isNotEmpty()) {
-        response().setStatusCode(400)
-        json(errs)
-        return
-    }
-
-    val post = db.call(body)
-    response().setStatusCode(201)
-    json(post)
-}
-
-private suspend fun sqliteWriter(dbPath: Path, chan: ReceiveChannel<Call<NewPost, Post>>, ready: CompletableDeferred<Unit>): Unit =
-    Arena.ofConfined().use { arena ->
-        SQLite3Conn.open(arena, dbPath).use { conn ->
-            conn.exec(
-                """
-                PRAGMA journal_mode = WAL;
-                PRAGMA synchronous = NORMAL;
-                PRAGMA foreign_keys = ON;
-                PRAGMA busy_timeout = 10000;
-
-                PRAGMA strict = ON;
-
-                PRAGMA optimize = 0x10002;
-                """
-            )
-
-            ready.complete(Unit)
-
-            for ((req, res) in chan) {
-                val post = conn.transact(SQLite3Conn.TxMode.IMMEDIATE) {
-                    insertUser(req.email)
-                    insertPost(req)
-                }
-
-                res.send(post)
-            }
-
-            conn.exec("PRAGMA optimize;")
-        }
-    }
 
 private suspend fun RoutingContext.postPG(pg: Pool) {
     val body = requireNotNull(body().asPojo(NewPost::class.java))
@@ -142,7 +62,7 @@ private suspend fun RoutingContext.postPG(pg: Pool) {
     json(post)
 }
 
-class App : CoroutineVerticle() {
+class App(private val sharedWriter: PostWriter? = null) : CoroutineVerticle() {
 
     private companion object {
         val logger = System.getLogger(App::class.java.name)
@@ -154,60 +74,74 @@ class App : CoroutineVerticle() {
         }
     }
 
-    private val writeSQLiteChan = Channel<Call<NewPost, Post>>(Channel.BUFFERED)
     private var pg: Pool? = null
-    private val sqliteDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    private var sqliteJob: Job? = null
+    private var writer: PostWriter? = null
+    private var server: HttpServer? = null
 
     override suspend fun start() {
         val usePostgres = config.getString("db.backend", "sqlite") == "postgres"
-        if (usePostgres) {
-            pg = mkPG(vertx)
-        } else {
-            val ready = CompletableDeferred<Unit>()
-            sqliteJob = launch(sqliteDispatcher) {
-                try {
-                    sqliteWriter(Path.of(config.getString("db.path", "../db/db.sqlite")), writeSQLiteChan, ready)
-                } catch (e: Exception) {
-                    ready.completeExceptionally(e)
-                    throw e
-                }
-            }
-            ready.await()
+        if (usePostgres) pg = mkPG(vertx)
+        else writer = sharedWriter ?: PostWriter(Path.of(config.getString("db.path", "../db/db.sqlite")))
+
+        fun parse(ctx: RoutingContext): NewPost? = try {
+            JsonCodec.decode(requireNotNull(ctx.body().buffer()).bytes)
+        } catch (_: Exception) {
+            ctx.response().setStatusCode(400).end("invalid JSON body")
+            null
         }
 
         val router = Router.router(vertx).apply {
-            val fileUploads = false
-            route().handler(BodyHandler.create(fileUploads))
-
-            post("/echo").handler {
-                val body = it.body().asPojo(NewPost::class.java)
-                it.json(body)
+            route().handler(BodyHandler.create(false))
+            post("/echo").handler { ctx ->
+                val body = parse(ctx) ?: return@handler
+                ctx.response().putHeader("content-type", "application/json")
+                    .end(Buffer.buffer(JsonCodec.encode(body)))
             }
-
             if (usePostgres) {
-                coHandler(post("/posts")) { postPG(requireNotNull(pg)) }
+                post("/posts").handler { ctx ->
+                    launch {
+                        try { ctx.postPG(requireNotNull(pg)) }
+                        catch (e: Exception) { ctx.fail(e) }
+                    }
+                }
             } else {
-                coHandler(post("/posts")) { postSQLite(writeSQLiteChan) }
+                post("/posts").handler { ctx ->
+                    val body = parse(ctx) ?: return@handler
+                    val errors = body.validate()
+                    if (errors.isNotEmpty()) {
+                        ctx.response().setStatusCode(400).putHeader("content-type", "application/json")
+                            .end(Buffer.buffer(JsonCodec.encode(errors)))
+                    } else {
+                        try {
+                            val responseContext = requireNotNull(Vertx.currentContext())
+                            requireNotNull(writer).submit(body) { result, error ->
+                                responseContext.runOnContext {
+                                    if (error != null) ctx.response().setStatusCode(500).end("database error")
+                                    else ctx.response().setStatusCode(201).putHeader("content-type", "application/json")
+                                        .end(Buffer.buffer(JsonCodec.encode(requireNotNull(result))))
+                                }
+                            }
+                        } catch (_: RejectedExecutionException) {
+                            ctx.response().setStatusCode(503).end("writer queue full")
+                        }
+                    }
+                }
             }
         }
 
         val uds = config.getString("http.socket", "/tmp/benchmark.sock")
 
-        vertx.createHttpServer()
+        server = vertx.createHttpServer()
             .requestHandler(router)
             .listen(SocketAddress.domainSocketAddress(uds))
             .coAwait()
 
-        logger.log(System.Logger.Level.INFO, uds)
+        logger.log(System.Logger.Level.INFO, "Listening on $uds")
     }
 
     override suspend fun stop() {
-        // closes database
-        writeSQLiteChan.close()
-
-        sqliteJob?.join()
-        sqliteDispatcher.close()
+        server?.close()?.coAwait()
+        if (sharedWriter == null) writer?.close()
         pg?.close()?.coAwait()
     }
 }

@@ -100,6 +100,25 @@ aborts up to 50 in-flight requests at its 10-second deadline; committed posts ma
 therefore exceed received HTTP 201 responses by up to 50. Integrity, foreign keys,
 post contents and row counts are checked after a clean server exit.
 
+## Binary startup
+
+Five fresh processes, alternating with Kotlin, reached Hertz's post-bind
+`HTTP server listening on address=…` log in a median **8.73ms**. The first launch
+took 441.1ms; the other four took 8.5–9.1ms. Filesystem caches were not flushed.
+The application's earlier `Listening on…` line precedes binding and is not used
+as the readiness marker. An echo request confirms readiness after timing ends.
+
+With both artifacts built and `JAVA_HOME` pointing to JDK 26 for the Kotlin runs:
+
+```sh
+python3 ../measure-startup.py ../results/startup
+```
+
+The measurement starts immediately before spawning the built binary and includes
+runtime, SQLite initialization and socket binding. Builds and database migrations
+are excluded. The [root tables](../README.md) repeat this startup time for both
+endpoints; the script records every sample, log, command and artifact hash.
+
 ## Build timings
 
 ```sh

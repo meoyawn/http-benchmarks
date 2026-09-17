@@ -3,7 +3,6 @@ version: 3
 vars:
   JAR: build/libs/kotlin-vertx-panama-1.0-all.jar
   UNIX_SOCKET: /tmp/benchmark.sock
-  SQLITE3_HOME: '{{.SQLITE3_HOME | default "/opt/homebrew/opt/sqlite"}}'
   JAVA: '{{if .JAVA_HOME}}{{.JAVA_HOME}}/bin/java{{else}}java{{end}}'
 
 tasks:
@@ -25,5 +24,5 @@ tasks:
       - build
     cmd: >
       "{{.JAVA}}" -server -XX:+PerfDisableSharedMem --enable-native-access=ALL-UNNAMED
-      -Djava.library.path="{{.SQLITE3_HOME}}/lib" -Dhttp.socket={{.UNIX_SOCKET}}
+      -Dhttp.socket={{.UNIX_SOCKET}}
       -jar {{.JAR}}
