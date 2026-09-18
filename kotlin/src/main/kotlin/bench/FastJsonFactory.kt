@@ -12,7 +12,7 @@ import io.vertx.core.spi.JsonFactory
 import io.vertx.core.spi.json.JsonCodec
 import java.time.Instant
 
-/** Use the same JSON library for Vert.x configuration, clients and PostgreSQL. */
+/** Use the same JSON library for Vert.x configuration and JSON wrappers. */
 class FastJsonFactory : JsonFactory {
     override fun codec(): JsonCodec = FastJsonCodec
 }

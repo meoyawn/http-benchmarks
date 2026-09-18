@@ -9,8 +9,6 @@ import io.vertx.ext.web.RoutingContext
 import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
-import io.vertx.sqlclient.Pool
-import kotlinx.coroutines.launch
 import java.nio.file.Path
 import java.util.concurrent.RejectedExecutionException
 
@@ -42,39 +40,17 @@ private fun NewPost.validate(): List<String> {
     return errs
 }
 
-private suspend fun RoutingContext.postPG(pg: Pool) {
-    val body = requireNotNull(body().asPojo(NewPost::class.java))
-
-    val errs = body.validate()
-    if (errs.isNotEmpty()) {
-        response().setStatusCode(400)
-        json(errs)
-        return
-    }
-
-    val post = pg.transact {
-        insertUser(body.email)
-        insertPost(body)
-    }
-
-    response().setStatusCode(201)
-    json(post)
-}
-
 class App(private val sharedWriter: PostWriter? = null) : CoroutineVerticle() {
 
     private companion object {
         val logger = System.getLogger(App::class.java.name)
     }
 
-    private var pg: Pool? = null
     private var writer: PostWriter? = null
     private var server: HttpServer? = null
 
     override suspend fun start() {
-        val usePostgres = config.getString("db.backend", "sqlite") == "postgres"
-        if (usePostgres) pg = mkPG(vertx)
-        else writer = sharedWriter ?: PostWriter(Path.of(config.getString("db.path", "../db/db.sqlite")))
+        writer = sharedWriter ?: PostWriter(Path.of(config.getString("db.path", "../db/db.sqlite")))
 
         fun parse(ctx: RoutingContext): NewPost? = try {
             JsonCodec.decode(requireNotNull(ctx.body().buffer()).bytes)
@@ -90,33 +66,24 @@ class App(private val sharedWriter: PostWriter? = null) : CoroutineVerticle() {
                 ctx.response().putHeader("content-type", "application/json")
                     .end(Buffer.buffer(JsonCodec.encode(body)))
             }
-            if (usePostgres) {
-                post("/posts").handler { ctx ->
-                    launch {
-                        try { ctx.postPG(requireNotNull(pg)) }
-                        catch (e: Exception) { ctx.fail(e) }
-                    }
-                }
-            } else {
-                post("/posts").handler { ctx ->
-                    val body = parse(ctx) ?: return@handler
-                    val errors = body.validate()
-                    if (errors.isNotEmpty()) {
-                        ctx.response().setStatusCode(400).putHeader("content-type", "application/json")
-                            .end(Buffer.buffer(JsonCodec.encode(errors)))
-                    } else {
-                        try {
-                            val responseContext = requireNotNull(Vertx.currentContext())
-                            requireNotNull(writer).submit(body) { result, error ->
-                                responseContext.runOnContext {
-                                    if (error != null) ctx.response().setStatusCode(500).end("database error")
-                                    else ctx.response().setStatusCode(201).putHeader("content-type", "application/json")
-                                        .end(Buffer.buffer(JsonCodec.encode(requireNotNull(result))))
-                                }
+            post("/posts").handler { ctx ->
+                val body = parse(ctx) ?: return@handler
+                val errors = body.validate()
+                if (errors.isNotEmpty()) {
+                    ctx.response().setStatusCode(400).putHeader("content-type", "application/json")
+                        .end(Buffer.buffer(JsonCodec.encode(errors)))
+                } else {
+                    try {
+                        val responseContext = requireNotNull(Vertx.currentContext())
+                        requireNotNull(writer).submit(body) { result, error ->
+                            responseContext.runOnContext {
+                                if (error != null) ctx.response().setStatusCode(500).end("database error")
+                                else ctx.response().setStatusCode(201).putHeader("content-type", "application/json")
+                                    .end(Buffer.buffer(JsonCodec.encode(requireNotNull(result))))
                             }
-                        } catch (_: RejectedExecutionException) {
-                            ctx.response().setStatusCode(503).end("writer queue full")
                         }
+                    } catch (_: RejectedExecutionException) {
+                        ctx.response().setStatusCode(503).end("writer queue full")
                     }
                 }
             }
@@ -135,6 +102,5 @@ class App(private val sharedWriter: PostWriter? = null) : CoroutineVerticle() {
     override suspend fun stop() {
         server?.close()?.coAwait()
         if (sharedWriter == null) writer?.close()
-        pg?.close()?.coAwait()
     }
 }

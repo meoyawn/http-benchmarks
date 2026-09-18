@@ -15,6 +15,8 @@ object Main {
 
     @JvmStatic
     fun main(args: Array<String>): Unit = runBlocking {
+        // The benchmark only listens on a Unix socket; it has no DNS clients.
+        System.setProperty("vertx.disableDnsResolver", "true")
         val workers = Integer.getInteger("http.workers", 4)
         require(workers > 0) { "http.workers must be positive, got $workers" }
         val vertx = Vertx.vertx(VertxOptions().setPreferNativeTransport(true).setEventLoopPoolSize(workers))
@@ -24,9 +26,7 @@ object Main {
             val config = try { retriever.config.coAwait() } finally { retriever.close() }
             val socket = Path.of(config.getString("http.socket", "/tmp/benchmark.sock"))
             require(!Files.exists(socket, NOFOLLOW_LINKS)) { "Socket path already exists: $socket" }
-            if (config.getString("db.backend", "sqlite") != "postgres") {
-                writer = PostWriter(Path.of(config.getString("db.path", "../db/db.sqlite")))
-            }
+            writer = PostWriter(Path.of(config.getString("db.path", "../db/db.sqlite")))
             vertx.deployVerticle(java.util.function.Supplier { App(writer) },
                 DeploymentOptions().setInstances(workers).setConfig(config)).coAwait()
         } catch (e: Exception) {

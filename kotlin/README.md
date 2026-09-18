@@ -47,8 +47,8 @@ server use Java 26 and its stable Foreign Function & Memory API; no preview flag
 The production build contains the selected stack only; experimental comparison
 sources, dependencies and Gradle tasks are not included.
 fastjson2 is the only bundled JSON implementation. `FastJsonFactory` supplies
-Vert.x's JSON SPI for configuration, JSON wrappers and the optional PostgreSQL
-path. Jackson is excluded from all Gradle configurations; the unused JSON-schema
+Vert.x's JSON SPI for configuration and JSON wrappers.
+Jackson is excluded from all Gradle configurations; the unused JSON-schema
 dependency is removed and WebClient is test-only.
 
 ## Build and run
@@ -80,7 +80,7 @@ Downloads are cached in `.tools`; subsequent builds support Gradle's `--offline`
 Set `CC` to select another C compiler. The Gradle distribution and SQLite archive
 are pinned with SHA-256 checksums.
 
-`buildJit` also stages the JAR's three native libraries in `build/jit/native`
+`buildJit` also stages the JAR's two native libraries (SQLite and Netty transport) in `build/jit/native`
 and trains a JDK 26 HotSpot cache at `build/jit/kotlin-bench.aot` using the packaged
 HTTP verification suite and a disposable database. It regenerates the cache when
 the JAR (including its timestamp), native libraries, training inputs or JDK change.
@@ -109,8 +109,10 @@ The default database is `../db/db.sqlite`. Override it with
 no heap-size or garbage-collector override was used in the published results.
 An existing socket is rejected, and the database must already be migrated.
 Stop with Ctrl-C or SIGTERM to close the HTTP server and drain the writer queue.
-The optional PostgreSQL path remains available with `-Ddb.backend=postgres`;
-it was not benchmarked in this update.
+SQLite is the only database backend. The unused PostgreSQL code, client and
+container configuration have been removed, along with Netty's DNS codec,
+asynchronous resolver and macOS native DNS resolver. The application and tests
+disable Vert.x's asynchronous DNS resolver; this server only listens on a Unix socket.
 
 ### Optimized GraalVM executable
 
@@ -146,7 +148,7 @@ adjacent `native/` directory for reuse by `task start-native`. Distribute that
 directory and the executable together with any adjacent
 GraalVM runtime libraries (`libmanagement_ext.dylib` on the measured macOS ARM64
 build). The executable is stripped and ad-hoc signed on macOS.
-The native Linux and PostgreSQL paths have not been validated here.
+The native Linux path has not been validated here.
 
 The checked-in reachability metadata registers the SQLite FFM call signatures,
 including the three variadic `sqlite3_config` forms, JSON model reflection and
@@ -304,8 +306,10 @@ Vert.x JSON SPI. Removing Jackson alone was not the main startup improvement.
 `buildJit` creates the cache through `verify-executable.py`, exercising echo,
 committed writes, validation and rollback against a disposable database. Cache
 creation and native staging happen during the build and are excluded from startup.
-The **15.07 MiB** JAR, **40.97 MiB** cache and **1.75 MiB** native directory total
-**57.80 MiB**, excluding the installed JDK. The standalone JAR remains available
+After removing unused PostgreSQL and DNS dependencies, the **14.36 MiB** JAR
+(**15,058,039 bytes**), **40.23 MiB** cache and **1.70 MiB** native directory total
+**56.29 MiB**, excluding the installed JDK. Startup and throughput figures retain
+their earlier measurements. The standalone JAR remains available
 without the cache, with slower extraction and class loading.
 
 ```fish

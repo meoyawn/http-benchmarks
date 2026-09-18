@@ -111,7 +111,7 @@ Build and reproduction: [randomized load runner](loadgen/README.md). `task bench
 | [C# .NET AOT](csharp/) † | 30.0K | 1.232ms | 105.6 MiB | 257% | 89.28ms | 24.85s | 0.707s (JIT) | 9.19 MiB |
 | [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) † | 29.4K | 1.306ms | 37.0 MiB | 148% | 8.92ms | 1.12s | 0.521s | 4.60 MiB |
 | [Rust Actix (`-workers 3`)](rust/) † | 29.2K | 1.298ms | 12.3 MiB | 141% | 10.67ms | 43.20s | 1.23s | 1.70 MiB |
-| Kotlin Vert.x SQLite Panama (JVM) † | 28.8K | 1.259ms | 176.3 MiB | 183% | 183.04ms | 21.15s | 1.09s | 15.07 MiB (JAR) |
+| Kotlin Vert.x SQLite Panama (JVM) † | 28.8K | 1.259ms | 176.3 MiB | 183% | 183.04ms | 21.15s | 1.09s | 14.36 MiB (JAR) |
 | [Go FastHTTP (`GOMAXPROCS=4`)](go/) † | 28.6K | 1.372ms | 26.1 MiB | 183% | 8.82ms | 19.87s | 1.03s | 7.78 MiB |
 | [Zig std.http/zio (`-workers 4`)](zig/) † | 26.8K | 1.493ms | 14.9 MiB | 187% | 5.84ms | 34.25s | 3.05s | 0.80 MiB |
 | [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) † | 23.0K | 1.685ms | 95.4 MiB | 226% | 10.00ms | 1.12s | 0.521s | 4.60 MiB |
@@ -284,9 +284,11 @@ The GraalVM executable is stripped and ad-hoc signed after compilation.
 
 - Go's **7.78 MiB executable includes statically linked SQLite**. Both
   `GOMAXPROCS` configurations use this same artifact, down from 10.12 MiB.
-- Kotlin's **15.07 MiB runnable fat JAR includes dependencies and native SQLite**.
-  The **183.04ms** startup uses **40.97 MiB of HotSpot cache** and **1.75 MiB of
-  staged native libraries**, **57.80 MiB combined**. The installed JDK 26 is excluded.
+- Kotlin's **14.36 MiB runnable fat JAR includes dependencies and native SQLite**,
+  down from 15.07 MiB after removing unused PostgreSQL and Netty DNS dependencies.
+  The current **40.23 MiB HotSpot cache** and **1.70 MiB staged native libraries**
+  bring the distribution to **56.29 MiB**, excluding the installed JDK 26.
+  Startup and throughput figures retain their earlier measurements.
 - Kotlin GraalVM's **88.12 MiB executable includes SQLite and Netty native
   resources**, plus a **0.07 MiB `libmanagement_ext.dylib`** runtime library and
   **1.75 MiB staged native libraries** for the **29.62ms** startup:
