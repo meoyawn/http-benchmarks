@@ -155,40 +155,6 @@
       "type": "io.netty.handler.codec.http.websocketx.extensions.WebSocketServerExtensionHandler"
     },
     {
-      "type": "io.netty.resolver.dns.Cache$Entries"
-    },
-    {
-      "type": "io.netty.resolver.dns.macos.DnsResolver",
-      "jniAccessible": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "byte[][]",
-            "int",
-            "java.lang.String[]",
-            "java.lang.String",
-            "int",
-            "int"
-          ]
-        }
-      ]
-    },
-    {
-      "type": "io.netty.resolver.dns.macos.DnsResolver[]"
-    },
-    {
-      "type": "io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider",
-      "jniAccessible": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
       "type": "io.netty.util.DefaultAttributeMap"
     },
     {
@@ -346,9 +312,6 @@
     },
     {
       "type": "io.vertx.ext.web.impl.RoutingContextImplBase"
-    },
-    {
-      "type": "io.vertx.sqlclient.impl.TransactionPropagationLocal"
     },
     {
       "type": "java.io.FileDescriptor",

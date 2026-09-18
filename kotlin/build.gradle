@@ -81,6 +81,9 @@ configurations.configureEach {
     exclude group: 'com.fasterxml.jackson.core'
     exclude group: 'com.fasterxml.jackson.module'
     exclude group: 'com.fasterxml.jackson.datatype'
+    // Unix-socket-only server; Main and tests disable Vert.x's asynchronous DNS.
+    exclude group: 'io.netty', module: 'netty-resolver-dns'
+    exclude group: 'io.netty', module: 'netty-codec-dns'
 }
 
 dependencies {
@@ -96,13 +99,9 @@ dependencies {
         "io.vertx:vertx-config",
         "io.vertx:vertx-lang-kotlin-coroutines",
         "io.vertx:vertx-web",
-
-        // pg
-        "io.vertx:vertx-pg-client",
     )
     if (nativeOs == 'macos') {
         implementation(
-            "io.netty:netty-resolver-dns-native-macos::osx-${nativeArch == 'aarch64' ? 'aarch_64' : nativeArch}",
             "io.netty:netty-transport-native-kqueue::osx-${nativeArch == 'aarch64' ? 'aarch_64' : nativeArch}",
         )
     } else {
@@ -121,6 +120,7 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    systemProperty 'vertx.disableDnsResolver', 'true'
     def libraryOverride = providers.systemProperty('sqlite.library').orNull
     if (libraryOverride != null) systemProperty 'sqlite.library', libraryOverride
     jvmArgs application.applicationDefaultJvmArgs
