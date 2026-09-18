@@ -141,6 +141,10 @@ reader only implements Content-Length framing. Adding UDS and chunked-body
 support would require a framework fork before it could meet this benchmark's
 existing HTTP checks.
 
+The subsequent [MAY evaluation](may-evaluation.md) implements that fork and
+compares it against fresh Actix and Go controls. It retains Actix and keeps MAY
+as an opt-in experiment; the results above describe the earlier investigation.
+
 Axum, direct Hyper, Smol, tiny_http, the shared Hyper/SQLite pool and both modified
 waker builds passed the existing real-HTTP checks: 211
 verified commits, 50 concurrent clients, validation fixtures, malformed input,

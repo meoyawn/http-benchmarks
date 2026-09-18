@@ -135,6 +135,13 @@ HTTP/runtime comparisons. Rust's database control was faster; notifying its HTTP
 executor after each commit cost more in the instrumented runs. None of the tested
 alternatives reliably beat Go, so the implementation and ranking are retained.
 
+The subsequent [MAY coroutine fork evaluation](rust/may-evaluation.md) completed
+the Unix-socket, chunked-body and graceful-shutdown work from issue #12. MAY,
+Actix and Go measured 55.12K, 55.14K and 54.94K writes/sec in the same final sweep,
+with overlapping ranges. This does not establish a reliable improvement; Actix
+remains the default and these historical ranking rows are retained. The pinned
+fork is available as an experimental Rust backend, with full samples and hashes.
+
 C# measures **48.4K writes/sec (JIT)** and **48.2K (Native AOT)**,
 with **368.8K / 349.2K echo RPS** using the same configuration for both endpoints.
 The HTTP/JSON setup correction replaces the earlier 146.2K / 136.3K echo results:

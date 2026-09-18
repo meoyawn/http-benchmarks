@@ -28,6 +28,13 @@ a fresh Go control, profiles both writers, and tests Axum, direct Hyper, Smol,
 blocking HTTP, shared scheduling and wake-up changes. It includes reproducible
 `sample`, Instruments and fgprof commands. No replacement was selected.
 
+The subsequent [MAY coroutine evaluation](may-evaluation.md) implements issue #12
+with a pinned personal `may_minihttp` fork, Unix sockets, bounded chunked bodies
+and graceful shutdown. Its three-run write median was 55.12K versus 54.94K for a
+fresh Go control and 55.14K for Actix, with overlapping ranges. The fork remains
+available through the opt-in `may` feature; Actix remains the default.
+Those figures belong to the newer controlled sweep, not the historical table above.
+
 The stripped release executable is **1.70 MiB (1,784,224 bytes)**; the shared SQLite library adds **1.62 MiB**, for 3.32 MiB combined. Median build times are **44.47s clean release** and **1.25s warm incremental debug rebuild**. Both worker configurations share these build timings.
 
 The previous ntex startup measurement around 39 ms had a concrete cause:

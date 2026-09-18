@@ -5,6 +5,7 @@ use regex::Regex;
 use rusqlite::{Connection, OpenFlags, Statement};
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, sync::OnceLock, thread};
+#[cfg(feature = "actix")]
 use tokio::sync::oneshot;
 
 #[allow(unsafe_code)]
@@ -154,7 +155,29 @@ impl Database {
 
 pub struct Job {
     input: NewPost,
-    reply: oneshot::Sender<Result<Post, String>>,
+    reply: Reply,
+}
+
+enum Reply {
+    #[cfg(feature = "actix")]
+    Async(oneshot::Sender<Result<Post, String>>),
+    #[cfg(feature = "may")]
+    Coroutine(may::sync::spsc::Sender<Result<Post, String>>),
+}
+
+impl Reply {
+    fn send(self, result: Result<Post, String>) {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Async(reply) => {
+                let _ = reply.send(result);
+            }
+            #[cfg(feature = "may")]
+            Self::Coroutine(reply) => {
+                let _ = reply.send(result);
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -163,12 +186,28 @@ pub struct Client {
 }
 
 impl Client {
+    #[cfg(feature = "actix")]
     pub async fn write(&self, input: NewPost) -> Result<Post, String> {
         let (reply, response) = oneshot::channel();
         self.sender
-            .try_send(Some(Job { input, reply }))
+            .try_send(Some(Job {
+                input,
+                reply: Reply::Async(reply),
+            }))
             .map_err(|e| e.to_string())?;
         response.await.map_err(|e| e.to_string())?
+    }
+
+    #[cfg(feature = "may")]
+    pub fn write_coroutine(&self, input: NewPost) -> Result<Post, String> {
+        let (reply, response) = may::sync::spsc::channel();
+        self.sender
+            .try_send(Some(Job {
+                input,
+                reply: Reply::Coroutine(reply),
+            }))
+            .map_err(|e| e.to_string())?;
+        response.recv().map_err(|e| e.to_string())?
     }
 }
 
@@ -256,7 +295,7 @@ impl Options {
                 while let Ok(Some(job)) = receiver.recv() {
                     let result = db.transact(&job.input);
                     // A disconnected HTTP client does not cancel an accepted transaction.
-                    let _ = job.reply.send(result);
+                    job.reply.send(result);
                 }
             })?;
         ready_rx
