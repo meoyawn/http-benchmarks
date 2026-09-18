@@ -10,13 +10,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/tailscale/sqlite/cgosqlite"
 	"github.com/tailscale/sqlite/sqliteh"
+	"github.com/valyala/fasthttp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -123,24 +124,18 @@ func count(t testing.TB, s *postStore, sql string) (n int64) {
 	return
 }
 
-func testServer(t *testing.T, handler app.HandlerFunc) (*http.Client, context.CancelFunc, *errgroup.Group) {
+func testServer(t *testing.T, handler fasthttp.RequestHandler) (*http.Client, context.CancelFunc, *errgroup.Group) {
 	t.Helper()
 	dir, err := os.MkdirTemp("/tmp", "go-http-test-") // Unix sockets have a short path limit.
 	must(t, err)
 	t.Cleanup(func() { must(t, os.RemoveAll(dir)) })
 	path := filepath.Join(dir, "http.sock")
-	h := newHTTPServer(path, 0, handler)
+	listener, err := net.Listen("unix", path)
+	must(t, err)
+	h := newHTTPServer(handler)
 	ctx, cancel := context.WithCancel(t.Context())
 	var server errgroup.Group
-	server.Go(func() error { return serve(ctx, h) })
-	deadline := time.Now().Add(10 * time.Second)
-	for !h.IsRunning() {
-		if time.Now().After(deadline) {
-			cancel()
-			t.Fatal("server did not start")
-		}
-		time.Sleep(time.Millisecond)
-	}
+	server.Go(func() error { return serve(ctx, h, listener) })
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", path)
 	}, MaxIdleConnsPerHost: 50}
@@ -299,7 +294,7 @@ func TestShutdownDrainsActiveRequest(t *testing.T) {
 	store := testStore(t)
 	entered := make(chan struct{})
 	handler := newHandler(store)
-	client, cancel, server := testServer(t, func(ctx context.Context, request *app.RequestContext) { close(entered); handler(ctx, request) })
+	client, cancel, server := testServer(t, func(ctx *fasthttp.RequestCtx) { close(entered); handler(ctx) })
 	store.mu.Lock()
 	var requests errgroup.Group
 	requests.Go(func() error {
@@ -344,6 +339,21 @@ func TestSQLiteSettingsAndForeignKeys(t *testing.T) {
 	must(t, store.close())
 	if _, err := store.create(NewPost{Email: "closed@example.com", Content: "x"}); err == nil {
 		t.Fatal("write to closed store succeeded")
+	}
+}
+
+func TestCancellationDuringServerStartup(t *testing.T) {
+	for i := range 50 {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		must(t, err)
+		ctx, cancel := context.WithCancel(t.Context())
+		var server errgroup.Group
+		server.Go(func() error { return serve(ctx, newHTTPServer(func(*fasthttp.RequestCtx) {}), listener) })
+		if i%2 == 0 {
+			runtime.Gosched()
+		}
+		cancel()
+		must(t, server.Wait())
 	}
 }
 

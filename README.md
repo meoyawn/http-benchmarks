@@ -8,7 +8,7 @@
 ## Results
 
 Apple M1 Pro **10 cores (8 performance + 2 efficiency)**, 16 GiB RAM, macOS 26.4.
-Go and OCaml were remeasured on **2026-09-17**. Kotlin JVM and GraalVM were
+OCaml was remeasured on **2026-09-17**. Go, Kotlin JVM and GraalVM were
 fully remeasured on **2026-09-18**, including both workloads, startup, clean builds,
 debug rebuilds and artifact sizes. Rust and both C# modes (JIT and Native AOT)
 were also measured on **2026-09-18**.
@@ -38,7 +38,8 @@ OCaml uses **5.5.1 with Flambda and `-O3`**, **Cohttp/Eio 6.3.0 / Eio 1.5**,
 **one HTTP domain + one dedicated SQLite writer domain**, selected for maximum
 write throughput. These are two parallel OCaml domains in one process. A second
 configuration shows the best echo domain count; both endpoints retain that same
-count within a run. Every worker explicitly receives an 8 MiB minor heap.
+count within a run. `-domains 1` / `-domains 4` select HTTP domains; the writer
+adds one. Every worker explicitly receives an 8 MiB minor heap.
 The full [1/2/4/8-domain results](ocaml/README.md#multicore-results)
 document the tradeoff.
 The previous single-event-loop OCaml results are superseded.
@@ -49,14 +50,21 @@ The GraalVM row uses the same application and SQLite with **Oracle GraalVM
 25.3.4.1 / JDK 25.0.4.1**, `-O3`, `-march=native`, the default Serial GC and
 ML-inferred profiles (no workload-trained PGO). fastjson2 initializes at runtime
 in the native executable. Both optimized native and fat-JAR builds remain available.
-Go uses **1.27.1**, **Hertz 0.10.6 / netpoll 0.7.5**, **goccy/go-json 0.10.6**,
-and **Tailscale SQLite acbe2dadf94c**. Setup: [Go](go/README.md),
+Go uses **1.27.1**, **FastHTTP 1.74.0**, **encoding/json/v2**,
+and **Tailscale SQLite acbe2dadf94c**. `GOMAXPROCS=2` is the write-optimized
+default; `GOMAXPROCS=4` is the echo configuration. Both rows use the same binary,
+with the same setting for both endpoints. This knob controls Go scheduler
+processors, not an HTTP worker count or OS thread limit. The SQLite writer is
+unchanged. The library comparison covered
+Hertz's two transports, poller/buffer tuning, FastHTTP, `net/http`, and automatic
+struct-mapping JSON codecs including `encoding/json/v2`. Setup: [Go](go/README.md),
 [Kotlin](kotlin/README.md), [OCaml](ocaml/README.md).
 
 Rust uses **1.98.0**, **Actix Web 4.15.0**, **serde_json 1.0.151** and
 **rusqlite 0.40.2**. One HTTP worker and one SQLite writer maximize writes;
 a second configuration uses three HTTP workers for echo. Each configuration
-uses the same worker count for both endpoints. Actix's Tokio/mio runtime uses
+uses the same worker count for both endpoints. `-workers 1` / `-workers 3` select
+HTTP workers; the SQLite writer adds one thread. Actix's Tokio/mio runtime uses
 macOS **kqueue**. The handler awaits an ordinary reply sent immediately after
 its transaction commits. Framework selection used echo throughput and startup,
 then verified the full write path. Setup and comparisons: [Rust](rust/README.md).
@@ -82,21 +90,31 @@ Use `pkgx oha` if `oha` is not installed.
 
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild | Release binary size |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [Rust Actix (1 HTTP + 1 writer)](rust/) | 48.5K | 0.954ms | 11.2 MiB | 143% | 8.10ms | 44.47s | 1.25s | 1.70 MiB |
+| [Go FastHTTP (`GOMAXPROCS=2`)](go/) | 50.7K | 0.883ms | 23.8 MiB | 150% | 8.59ms | 20.20s | 1.03s | 7.78 MiB |
+| [Rust Actix (`-workers 1`)](rust/) | 48.5K | 0.954ms | 11.2 MiB | 143% | 8.10ms | 44.47s | 1.25s | 1.70 MiB |
 | [C# .NET JIT](csharp/) | 48.4K | 0.908ms | 168.7 MiB | 320% | 166.47ms | 15.83s | 0.707s | 1.81 MiB (bundle) |
 | [C# .NET AOT](csharp/) | 48.2K | 0.906ms | 105.3 MiB | 307% | 89.28ms | 24.85s | 0.707s (JIT) | 9.19 MiB |
+| [Rust Actix (`-workers 3`)](rust/) | 46.1K | 0.995ms | 12.0 MiB | 165% | 8.76ms | 44.47s | 1.25s | 1.70 MiB |
 | Kotlin Vert.x SQLite Panama (JVM) | 45.3K | 0.992ms | 170.7 MiB | 191% | 183.04ms | 21.15s | 1.09s | 15.07 MiB (JAR) |
-| Go Hertz / Tailscale SQLite | 45.2K | 0.988ms | 73.3 MiB | 233% | 9.52ms | 21.11s | 1.23s | 10.12 MiB |
-| OCaml Cohttp/Eio (1 HTTP + 1 writer) | 45.1K | 0.973ms | 35.6 MiB | 157% | 8.92ms | 1.12s | 0.521s | 4.60 MiB |
+| [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) | 45.1K | 0.973ms | 35.6 MiB | 157% | 8.92ms | 1.12s | 0.521s | 4.60 MiB |
+| [Go FastHTTP (`GOMAXPROCS=4`)](go/) | 44.1K | 1.025ms | 25.4 MiB | 216% | 8.65ms | 20.20s | 1.03s | 7.78 MiB |
 | Zig http.zig | 43K | 1ms | — | — | — | — | — | — |
+| [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) | 35.1K | 1.298ms | 89.6 MiB | 261% | 10.00ms | 1.12s | 0.521s | 4.60 MiB |
 | JS Bun Hono | 21K | 1.9ms | — | — | — | — | — | — |
 | Python Blacksheep | 19K | 2.5ms | — | — | — | — | — | — |
 | Elixir Bandit | 10K | 4.9ms | — | — | — | — | — | — |
 | [Kotlin Vert.x SQLite Panama (GraalVM)](kotlin/#optimized-graalvm-executable) | 8.9K | 5.109ms | 104.6 MiB | 116% | 29.62ms | 149.49s | 1.09s (JVM) | 88.12 MiB |
 
-Go measures **45.2K writes/sec** and **297.9K echo RPS**. The fresh Kotlin JVM
-measurements are **45.3K writes/sec** and **373.0K echo RPS**. These are three-run
-medians, not the best individual samples; JVM writes ranged from 40.3K–45.4K and
+Go measures **50.7K writes/sec** with `GOMAXPROCS=2` and **333.6K echo RPS**
+with `GOMAXPROCS=4`. Their other endpoints measure **270.7K echo** and **44.1K
+writes/sec**, respectively: each row keeps its processor setting for both tests.
+All three final write samples at two processors exceed 50K (50.4K–50.9K), and all
+four-processor echo samples exceed 332K (332.5K–334.0K). Both targets are met using
+the two explicitly labeled configurations. Peak RSS is **23.8 / 24.3 MiB** for
+two-processor writes/echo and **25.4 / 25.8 MiB** for four processors.
+
+The fresh Kotlin JVM measurements are **45.3K writes/sec** and **373.0K echo RPS**.
+These are three-run medians, not the best individual samples; JVM writes ranged from 40.3K–45.4K and
 echo from 362.2K–378.2K. JVM peak sampled RSS is **170.7 / 490.3 MiB** for
 writes/echo; the echo maximum comes from the first run's higher RSS.
 
@@ -149,7 +167,7 @@ It includes runtime/native-library loading, SQLite initialization and listening.
 Databases are migrated beforehand, and an untimed echo checks readiness afterward.
 Builds and migration are excluded. Filesystem caches are not flushed, so these
 are process-start measurements, not guaranteed cold-cache startup.
-[Go/uncached Kotlin script](measure-startup.py), [Kotlin startup script](kotlin/measure-startup.py), [OCaml script](ocaml/measure-startup.py),
+[Go script](go/measure-startup.py), [Kotlin startup script](kotlin/measure-startup.py), [OCaml script](ocaml/measure-startup.py),
 [Rust script](rust/measure-startup.py),
 [Kotlin GraalVM startup script](kotlin/measure-startup.py),
 [C# script](csharp/measure.py). Rust also includes HTTP worker setup. C# launches
@@ -190,7 +208,8 @@ linking (or JVM classes/resources). Setup, downloads, source copying/edits, outp
 checks, tests and application startup are excluded. Native SQLite stays cached
 with the same optimized [shared configuration](db/sqlite-config.json).
 Raw samples, edit patches and build logs are in
-`results/debug-rebuild-2026-09-18/` (gitignored).
+`results/debug-rebuild-2026-09-18/` (gitignored); the updated Go samples are in
+`results/go-stacks-2026-09-18/debug/`.
 After the per-language toolchain/dependency setup, reproduce from the repository
 root with a fresh output directory:
 
@@ -198,12 +217,13 @@ root with a fresh output directory:
 python3 measure-debug-build.py results/debug-build
 ```
 
-**Clean release build** reports three-run medians. Both Kotlin modes were
-remeasured together; other languages retain their preceding measurements.
+**Clean release build** reports three-run medians. Go's selected stack and both
+Kotlin modes were remeasured; other languages retain their preceding measurements.
 Definitions differ by language:
 
 - [Go](go/measure-build.py): a fresh `GOCACHE` per clean build compiles the standard
-  library, dependencies, bundled SQLite C and application. `CGO_CFLAGS=-O3 -DNDEBUG`.
+  library, dependencies, bundled SQLite C and application, including release
+  stripping. `CGO_CFLAGS=-O3 -DNDEBUG`.
 - [Kotlin](kotlin/measure-build.py): warm Gradle/Kotlin daemons and
   offline dependencies, build cache disabled. `clean buildJit` includes SQLite C
   compilation, jextract, Kotlin/Java compilation, JAR packaging, native staging
@@ -234,7 +254,8 @@ by macOS `strip` and ad-hoc signing; Rust uses its release `strip=true` profile.
 Kotlin uses `shadowJar` on OpenJDK 26.0.2.1, plus `buildJit` for the cached launch.
 The GraalVM executable is stripped and ad-hoc signed after compilation.
 
-- Go's **10.12 MiB executable includes statically linked SQLite**.
+- Go's **7.78 MiB executable includes statically linked SQLite**. Both
+  `GOMAXPROCS` configurations use this same artifact, down from 10.12 MiB.
 - Kotlin's **15.07 MiB runnable fat JAR includes dependencies and native SQLite**.
   The **183.04ms** startup uses **40.97 MiB of HotSpot cache** and **1.75 MiB of
   staged native libraries**, **57.80 MiB combined**. The installed JDK 26 is excluded.
@@ -258,7 +279,17 @@ The GraalVM executable is stripped and ad-hoc signed after compilation.
 System libraries are excluded. The measured Go, Kotlin and OCaml artifacts passed
 echo, committed-write and database-integrity checks. Exact byte counts, hashes,
 build commands and validation logs are in `results/release-size-2026-09-18/`
-(gitignored). Other entries' binary sizes have not been measured.
+(gitignored). Go's updated audit and measurements are in
+`results/go-stacks-2026-09-18/` (gitignored), including exact aggregates and
+artifact hashes. Other entries' binary sizes have not been measured.
+
+The dependency audit found one HTTP server, JSON implementation and SQLite engine
+in Rust (Actix / serde_json / rusqlite), OCaml (Cohttp / generated ATD codecs using
+Yojson / sqlite3), and C# (Kestrel / System.Text.Json / native SQLite). Their
+experiment and build-tool dependencies are excluded from release binaries.
+Go's former Hertz build retained four JSON implementations; the replacement links
+only FastHTTP, the standard JSON engine and Tailscale SQLite. Go 1.27's v1 JSON
+compatibility API delegates to that same v2 engine.
 
 Peak RAM is whole-process RSS sampled with `ps` approximately every 100 ms, in MiB
 (2²⁰ bytes), including native SQLite and all domains/threads but excluding oha.
@@ -281,19 +312,20 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [Rust Actix (3 HTTP + 1 writer)](rust/) | 400.4K | 0.093ms | 12.3 MiB | 223% | 8.76ms | 44.47s | 1.25s |
+| [Rust Actix (`-workers 3`)](rust/) | 400.4K | 0.093ms | 12.3 MiB | 223% | 8.76ms | 44.47s | 1.25s |
 | Kotlin Vert.x (JVM) | 373.0K | 0.096ms | 490.3 MiB | 277% | 183.04ms | 21.15s | 1.09s |
 | [C# .NET JIT](csharp/) | 368.8K | 0.116ms | 170.0 MiB | 258% | 166.47ms | 15.83s | 0.707s |
 | [C# .NET AOT](csharp/) | 349.2K | 0.126ms | 105.9 MiB | 267% | 89.28ms | 24.85s | 0.707s (JIT) |
+| [Go FastHTTP (`GOMAXPROCS=4`)](go/) | 333.6K | 0.129ms | 25.8 MiB | 308% | 8.65ms | 20.20s | 1.03s |
 | [Kotlin Vert.x (GraalVM)](kotlin/#optimized-graalvm-executable) | 306.2K | 0.131ms | 90.1 MiB | 341% | 29.62ms | 149.49s | 1.09s (JVM) |
-| Go Hertz | 297.9K | 0.151ms | 74.6 MiB | 348% | 9.52ms | 21.11s | 1.23s |
+| [Go FastHTTP (`GOMAXPROCS=2`)](go/) | 270.7K | 0.165ms | 24.3 MiB | 185% | 8.59ms | 20.20s | 1.03s |
 | Zig http.zig | 264K | 0.2ms | — | — | — | — | — |
-| [Rust Actix (1 HTTP + 1 writer)](rust/) | 225.1K | 0.176ms | 11.5 MiB | 94% | 8.10ms | 44.47s | 1.25s |
+| [Rust Actix (`-workers 1`)](rust/) | 225.1K | 0.176ms | 11.5 MiB | 94% | 8.10ms | 44.47s | 1.25s |
 | Python Blacksheep | 192K | 0.2ms | — | — | — | — | — |
-| OCaml Cohttp/Eio (4 HTTP + 1 writer) | 160.4K | 0.295ms | 93.2 MiB | 297% | 10.00ms | 1.12s | 0.521s |
+| [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) | 160.4K | 0.295ms | 93.2 MiB | 297% | 10.00ms | 1.12s | 0.521s |
 | JS Bun Hono | 156K | 0.3ms | — | — | — | — | — |
 | Elixir Bandit | 139K | 0.3ms | — | — | — | — | — |
-| OCaml Cohttp/Eio (1 HTTP + 1 writer) | 89.5K | 0.515ms | 37.9 MiB | 88% | 8.92ms | 1.12s | 0.521s |
+| [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) | 89.5K | 0.515ms | 37.9 MiB | 88% | 8.92ms | 1.12s | 0.521s |
 
 OCaml's default used **157% CPU during writes** (100% is one core); the 4-HTTP-domain configuration used **297% during echo**. Every HTTP domain served requests, verified by counters. More HTTP domains improve echo but add coordination to SQLite's serialized writer.
 
@@ -319,6 +351,16 @@ all table values, artifact/source hashes, startup checks and database verificati
 python3 ocaml/measure-comparison.py results/comparison --ocaml-domains 1 2 4 8
 python3 measure-startup.py results/startup-go-kotlin
 python3 ocaml/measure-startup.py results/startup-ocaml --domains 1
+```
+
+Go's two configurations, after `cd go && task build`, can be reproduced from
+the repository root with:
+
+```sh
+python3 go/measure-configs.py results/go-http --binary go/bench --gomaxprocs 2 4
+python3 go/measure-startup.py results/go-startup --gomaxprocs 2 4
+python3 go/measure-build.py results/go-build
+python3 measure-debug-build.py results/go-debug --language go
 ```
 
 C# raw runs, artifact/source hashes and verification are in

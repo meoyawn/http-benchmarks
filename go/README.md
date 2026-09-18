@@ -1,187 +1,206 @@
-# Go / Hertz / native SQLite
+# Go / FastHTTP / native SQLite
 
-`POST /posts` parses and validates JSON, inserts or reuses a user, inserts a post,
-and returns the persisted row after committing. `POST /echo` parses and serializes
-the two request fields. Both endpoints use HTTP/1.1 over a Unix domain socket by
-default. This directory was previously named `go-net`.
+`POST /posts` automatically decodes JSON into a struct, validates it, inserts or
+reuses a user, inserts a post, and serializes the persisted row after committing.
+`POST /echo` automatically decodes and serializes the two request fields.
+Both endpoints use HTTP/1.1 over a Unix domain socket by default.
 
-## Versions
+## Versions and selection
 
-Updated on 2026-09-17. The HTTP and SQLite choices come from the local comparisons
-below, including alternatives to the original FastHTTP and gosqlite libraries.
+Remeasured on 2026-09-18, using all ten available cores of the Apple M1 Pro.
 
 | Component | Version |
 | --- | --- |
-| [Go](https://go.dev/doc/devel/release) | 1.27.1 |
-| [Hertz](https://github.com/cloudwego/hertz) | 0.10.6 |
-| [CloudWeGo netpoll](https://github.com/cloudwego/netpoll) | 0.7.5 |
+| Go / `encoding/json/v2` | 1.27.1 |
+| [FastHTTP](https://github.com/valyala/fasthttp) | 1.74.0 |
 | [Tailscale SQLite](https://github.com/tailscale/sqlite/tree/acbe2dadf94c) | `v0.0.0-20260910121735-acbe2dadf94c` |
-| SQLite, bundled in Tailscale's C bindings | 3.53.4 |
-| [goccy/go-json](https://github.com/goccy/go-json) | 0.10.6 |
+| SQLite, compiled into Tailscale's C bindings | 3.53.4 |
 | golang.org/x/sync | 0.23.0 |
 | oha, through pkgx | 1.16.0 |
 
-Direct and transitive versions are pinned in [go.mod](go.mod) and [go.sum](go.sum).
-Hertz also depends on Sonic internally; application request/response JSON uses
-goccy, which won this machine's small-payload comparison. The SQLite module has no
-tagged release, so it is pinned to the latest upstream commit available at the
-time of the update. Its native `cgosqlite` API avoids `database/sql` pooling and
-reflection for this single-writer workload.
+The whole-stack library comparison covered Hertz,
+FastHTTP and `net/http` with goccy, Sonic and both standard JSON APIs. It included
+`net/http` + `encoding/json/v2`, Hertz's netpoll and standard network backends,
+poller/buffer tuning, and processor sweeps. Only automatic struct mappers qualify;
+GJSON and fastjson are excluded as application codecs.
+
+The longer selection runs favored FastHTTP/v2: **50.7K writes/sec** at two
+processors and **335.7K echo RPS** at four. Hertz's standard backend with a 16 KiB
+read buffer was close at **50.0K / 333.4K**. FastHTTP also needs no framework patch
+and has a smaller binary. These selection samples are distinct from the final
+release measurements below. The old 2026-09-17 HTTP-only and JSON microbenchmark
+rankings are superseded by this complete-stack comparison; goccy's earlier
+151 ns/op result did not establish the fastest eligible HTTP/JSON/SQLite stack.
 
 ## Build and run
 
-Requires Go 1.27.1 and a C compiler (`CGO_ENABLED=1`, Go's native-build default).
-SQLite is compiled into the binary; no system SQLite headers or dynamic library
-are needed to build or run it. The `sqlite3` CLI below is only for the initial
-shared migration.
+Requires Go 1.27.1 and a C compiler (`CGO_ENABLED=1`, the native-build default).
+SQLite is compiled into the executable; system SQLite headers and a dynamic
+SQLite library are unnecessary. The CLI below is only for migration.
 
 ```sh
 cd go
 go mod download
-go test -race ./...
-env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .
+env CGO_CFLAGS='-O3 -DNDEBUG' GOMAXPROCS=2 go test -race ./...
+env CGO_CFLAGS='-O3 -DNDEBUG' GOMAXPROCS=4 go test -race ./...
+env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -ldflags='-s -w' -o bench .
 
 # Once, for a fresh database; reuse an already migrated database as-is.
 sqlite3 -bail ../db/db.sqlite < ../db/migrations/001_init.up.sql
 ./bench
 ```
 
-`task start` builds the same binary before running it. Optional flags:
+`task start` builds the same stripped executable. The default is `GOMAXPROCS=2`
+when that environment variable is unset or empty. Override it for the echo
+configuration:
 
 ```sh
-./bench -db /absolute/path/to/migrated.sqlite -socket /tmp/go-benchmark.sock
+env GOMAXPROCS=2 ./bench -db /absolute/path/migrated.sqlite -socket /tmp/go.sock
+env GOMAXPROCS=4 ./bench -db /absolute/path/migrated.sqlite -socket /tmp/go.sock
 ./bench -port 8080
 ```
 
-An existing socket/file is not overwritten. Stop with Ctrl-C or SIGTERM; the
-server drains requests before stopping the writer and closing SQLite. A missing
-database or migration fails startup before HTTP begins serving.
+`GOMAXPROCS` controls Go scheduler processors, not HTTP worker count or an OS
+thread limit. Both settings retain one dedicated SQLite writer goroutine. The
+same executable and setting handle both endpoints in each run. Two processors
+favor serialized writes; four favor echo. Read and idle timeouts remain ten
+seconds, keep-alive stays enabled, and FastHTTP's buffer sizes remain at defaults.
 
-SQLite uses WAL, `synchronous=NORMAL`, foreign keys, a 10-second busy timeout and
-the explicit 1,000-page WAL autocheckpoint. Its optimized compiler options, page
-pool, cache and temporary-storage settings match [Kotlin and OCaml](../db/README.md). One writer goroutine reuses prepared
-`BEGIN IMMEDIATE`, user insert, post insert with `RETURNING`, `COMMIT` and
-`ROLLBACK` statements. A bounded queue and pooled reply objects avoid allocating
-channels per request. Every request still performs its own two SQL writes and
-commit; there is no transaction batching or cache of users/posts. Failed writes
-reset statements and roll back before the next request.
+An existing socket/file is not overwritten. Ctrl-C or SIGTERM closes the listener,
+drains accepted requests, then stops the writer and closes SQLite. Cancellation
+during HTTP startup also closes the listener. Missing databases or migrations
+fail before HTTP begins serving.
 
-Email validation uses the same precompiled, whole-string ASCII regex as Kotlin
-and OCaml: `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`. Content must be
-nonempty. This deliberately simple rule replaces `net/mail.ParseAddress`;
-[shared test cases](../testdata/email-validation.json) keep all three aligned.
+## Persistence and correctness
 
-Tests use temporary databases and actual Unix-socket HTTP connections. They cover
-JSON parsing and validation, response and persisted content (including embedded
-NULs, escaping and Unicode), case-insensitive user reuse, concurrent writes,
-rollback/recovery, foreign keys, shutdown with a blocked write, and startup
-failures.
+SQLite uses WAL, `synchronous=NORMAL`, foreign keys, a ten-second busy timeout,
+and explicit 1,000-page WAL autocheckpoint. The optimized C compiler options,
+page pool, cache and temporary-storage settings match the other implementations'
+[shared configuration](../db/README.md). Tailscale's direct `cgosqlite` API avoids
+`database/sql` pooling and reflection for this single-writer workload.
 
-## HTTP throughput and RAM
+One writer reuses prepared `BEGIN IMMEDIATE`, user insert, post insert with five
+`RETURNING` columns, `COMMIT` and `ROLLBACK` statements. A bounded queue and pooled
+reply objects avoid per-request channel allocation. Every request performs its
+own transaction and receives its response after its own commit. There is no
+batching, user cache, precomputed response or manual JSON field mapping. Failed
+writes reset statements and roll back before the next request. The SQLite writer
+and C configuration are unchanged by the HTTP/JSON switch.
 
-The final three-run medians are **45.2K writes/sec** and
-**297.9K echo RPS**, measured in rotating order with Kotlin
-and OCaml under the shared SQLite configuration. Peak RSS is
-**73.3 / 74.6 MiB** respectively.
-See the [root tables](../README.md). Individual samples are retained locally in
-`ocaml/measurements.json` at the repository root (gitignored).
+Email validation uses the shared whole-string ASCII regex
+`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`; content must be nonempty.
+[Shared examples](../testdata/email-validation.json) keep implementations aligned.
+JSON uses v2's defaults, including case-sensitive field matching and duplicate-key
+rejection; unknown fields are ignored. The benchmark sends the declared lowercase
+field names.
 
-With the server stopped, run from this directory:
+Race-enabled tests run at both processor settings. They use temporary databases
+and actual Unix-socket HTTP connections, covering malformed JSON/types, validation,
+response/persisted content (Unicode, escaping and NUL), case-insensitive user reuse,
+concurrent writes, rollback/recovery, foreign keys, blocked-write shutdown, startup
+failure and cancellation during startup.
 
-```sh
-env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .
-python3 measure-http.py ../results/go-http
-```
+## Final release measurements
 
-The script creates a fresh database from the shared migration, starts the binary,
-then runs the root README's exact payloads with `pkgx oha`, 50 connections and
-10 seconds each: `/posts` followed by `/echo`, without an HTTP warm-up. It adds
-only `--output-format json` to capture the measurements. Use `--oha oha` if oha is
-installed directly, or `--socket /tmp/another.sock` to select another socket.
-Choose a fresh output directory for each run; an existing database is rejected.
+Three rotating runs per configuration on 2026-09-18, fresh processes/databases,
+50 connections, ten seconds of `/posts` then ten seconds of `/echo`, no HTTP
+warm-up. RPS, p50 and CPU are medians; RSS is the largest 100 ms sample across all
+three runs. CPU is whole-process CPU-time delta divided by elapsed wall time;
+100% is one core. Echo retains memory allocated during writes.
 
-RAM is the server process's maximum sampled resident set size (RSS), queried with
-`ps` approximately every 100 ms during each workload. It includes Go, native code
-and SQLite memory, excludes oha, and is a sampled peak rather than the exact
-kernel high-water mark. The echo sample uses the same process after `/posts`, so
-it includes retained database memory. RSS is not Go heap size or macOS physical
-footprint.
+| `GOMAXPROCS` | Endpoint | RPS | p50 | Peak RSS | CPU | Start + bind |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 2 | `/posts` | 50.7K | 0.883ms | 23.8 MiB | 150% | 8.59ms |
+| 2 | `/echo` | 270.7K | 0.165ms | 24.3 MiB | 185% | 8.59ms |
+| 4 | `/posts` | 44.1K | 1.025ms | 25.4 MiB | 216% | 8.65ms |
+| 4 | `/echo` | 333.6K | 0.129ms | 25.8 MiB | 308% | 8.65ms |
 
-Each run saves oha JSON, server logs, individual RSS samples, endpoint summaries
-and database checks. All completed requests must have the expected status. oha
-aborts up to 50 in-flight requests at its 10-second deadline; committed posts may
-therefore exceed received HTTP 201 responses by up to 50. Integrity, foreign keys,
-post contents and row counts are checked after a clean server exit.
+Two-processor writes ranged **50.4K–50.9K**, with echo **270.3K–272.3K**.
+Four-processor writes ranged **44.0K–44.5K**, with echo **332.5K–334.0K**.
+These meet the 45K+ write and 300K+ echo targets in their respective configurations;
+the table also shows the tradeoff on the other endpoint. Every sample is retained.
+All completed requests returned the expected status, and every database passed
+integrity, foreign-key, stored-content, user-reuse and AUTOINCREMENT checks.
+The [root tables](../README.md) repeat both configurations.
 
-## Binary startup
-
-Five fresh processes, alternating with Kotlin, reached Hertz's post-bind
-`HTTP server listening on address=…` log in a median **9.52ms**.
-Filesystem caches were not flushed.
-The application's earlier `Listening on…` line precedes binding and is not used
-as the readiness marker. An echo request confirms readiness after timing ends.
-
-With both artifacts built and `JAVA_HOME` pointing to JDK 26 for the Kotlin runs:
+From the repository root, after building the binary:
 
 ```sh
-python3 ../measure-startup.py ../results/startup
+python3 go/measure-configs.py results/go-http --binary go/bench --gomaxprocs 2 4
+python3 go/measure-startup.py results/go-startup --gomaxprocs 2 4
 ```
 
-The measurement starts immediately before spawning the built binary and includes
-runtime, SQLite initialization and socket binding. Builds and database migrations
-are excluded. The [root tables](../README.md) repeat this startup time for both
-endpoints; the script records every sample, log, command and artifact hash.
+`task benchmark` and `task measure-startup` in this directory run those same
+configurations. Use fresh output directories. The load script records raw oha
+output, status/error distributions, RSS samples, CPU deltas and database checks.
+Up to 50 in-flight requests can commit after oha's deadline, so stored posts may
+exceed received HTTP 201 responses by at most 50. Samples and artifact hashes are
+retained under `results/go-stacks-2026-09-18/` locally (gitignored).
+
+Startup uses five alternating fresh processes per setting, timed immediately
+before launching the executable until receipt of the post-bind `Listening on…`
+log. It includes runtime and SQLite initialization plus UDS binding, excludes
+builds/migration, and checks echo readiness afterward. Filesystem caches are not
+flushed. Medians are **8.59 / 8.65 ms** for two/four processors.
 
 ## Build timings
 
+From the repository root:
+
 ```sh
-python3 measure-build.py ../results/go-build
-python3 ../measure-debug-build.py ../results/go-debug-build --language go
+python3 go/measure-build.py results/go-build
+python3 measure-debug-build.py results/go-debug --language go
 ```
 
-The first script supplies the **21.11s clean release** median using
-`env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .`.
-Each of three clean samples uses a separate empty `GOCACHE`, including compilation of the
-standard library, dependencies, bundled SQLite C source, application, and linking.
-Its additional release rebuild samples are not used in the root tables.
+The clean release median is **20.20s**, using
+`env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -ldflags='-s -w' -o bench .`.
+Each of three samples uses a fresh `GOCACHE`, compiling the standard library,
+dependencies, bundled SQLite C, application and stripped executable. Dependency
+and toolchain downloads are excluded. The extra release rebuilds measured by
+that script are not used in the root tables.
 
-The second script supplies the **1.23s warm debug rebuild** median, remeasured on
-2026-09-18. After an excluded warm-up and no-change control, each of three samples
-renames the exported `NewPost` type in `main.go` and its consumers in `store.go`.
-It runs `go build -gcflags='all=-N -l' -o bench-debug .`, disabling Go optimizations
-and inlining while retaining debug information. The warm cache retains dependencies
-and optimized SQLite C; the application is recompiled and linked. Changed binary
-hashes confirm that every sample rebuilt.
+The warm debug rebuild median is **1.03s**. After an excluded warm-up and
+no-change control, each of three samples renames exported `NewPost` and its
+consumers across `main.go` and `store.go` in a disposable source copy. The command
+is `go build -gcflags='all=-N -l' -o bench-debug .`: Go optimization and inlining
+are disabled, debug information retained, and native SQLite stays cached with
+`-O3 -DNDEBUG`. Output hashes confirm every edit causes a rebuild. Source copying,
+edits, tests and application startup are excluded. Both configurations share
+these build times and the same executable.
 
-Both scripts use disposable source copies and separate caches. Tests, downloads,
-setup and source edits are excluded from timing. Raw debug rebuild samples and
-patches are in `results/debug-rebuild-2026-09-18/` at the repository root
-(gitignored); the earlier clean release samples are in the local generated
-`ocaml/measurements.json` report.
+## One HTTP server, one JSON implementation, one SQLite engine
 
-## Why these libraries
+The stripped release is **7.78 MiB (8,159,570 bytes)**, including static SQLite,
+down from the original Hertz/goccy executable's 10.12 MiB. The optimized symbol
+companion and release build metadata confirm:
 
-These library-selection measurements were collected during the update. They are
-specific to this Apple M1 Pro, macOS 26.4, Go 1.27.1 and this workload; they do not
-establish a universally fastest HTTP or SQLite library.
+- One HTTP server: FastHTTP. `net/http` support types used by dependencies do not
+  retain `net/http.Server.Serve` as a second server.
+- One JSON engine: the standard library. On Go 1.27, `encoding/json` is a v1
+  compatibility API over the same v2 engine; it is not a second implementation.
+  Tailscale's `expvar` statistics retain that compatibility API. No goccy, Sonic,
+  GJSON, jsoniter, segmentio or fastjson implementation is linked.
+- One SQLite engine: Tailscale `cgosqlite`, statically linked. There is no second
+  Go SQLite driver or dynamically loaded SQLite library.
 
-### HTTP
+The production [module manifest](go.mod) has no Hertz or alternate JSON dependency.
 
-Three 10-second Unix-socket echo runs per candidate, in rotating order, with the
-same JSON library, payload and 50 connections. Medians:
+Reproduce the binary audit on macOS with the same source and optimized flags:
 
-| HTTP implementation | Version | RPS | p50 latency |
-| --- | --- | ---: | ---: |
-| Hertz / netpoll | 0.10.6 / 0.7.5 | 297.4K | 0.150ms |
-| net/http | Go 1.27.1 | 237.6K | 0.155ms |
-| Fiber | 3.5.0 | 231.3K | 0.190ms |
-| FastHTTP | 1.74.0 | 229.1K | 0.191ms |
+```sh
+env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench-symbols .
+python3 audit-binary.py bench-symbols bench
+```
 
-These isolate HTTP/JSON handling; the root tables measure the complete application.
-[Gnet](https://github.com/panjf2000/gnet) is a networking engine, not a complete HTTP implementation, so it would need a
-separate HTTP parser and protocol handling to run this comparison.
+The script checks linked server entry points and codec symbols, one SQLite engine,
+Tailscale's binding, and native library links. The companion differs only in debug
+symbols; the release uses `-ldflags='-s -w'`. Exact bytes, hashes and build metadata
+are retained in `results/go-stacks-2026-09-18/release-audit.json` locally (gitignored).
 
-### SQLite and JSON
+## Historical SQLite selection
+
+These 2026-09-17 direct-API measurements explain retaining Tailscale; the new
+HTTP/JSON experiment holds SQLite fixed. They are workload/machine-specific.
 
 The SQLite measurements used the shared schema, a fresh on-disk WAL database,
 `synchronous=NORMAL`, foreign keys, prepared statements and one transaction per
@@ -204,10 +223,3 @@ These compare the latest available library versions with their supplied engines.
 Tailscale, mattn, ncruces and modernc use SQLite 3.53.4; crawshaw bundles 3.53.0,
 and the original gosqlite still bundles 3.46.0. Tailscale's combined step/reset
 calls and native typed-column access won this workload.
-
-The JSON comparison parses and serializes the echo payload. Its medians were
-**151 ns/op** for goccy/go-json, **438 ns/op** for the standard library and
-**651 ns/op** for Sonic's standard-compatible configuration.
-
-Local raw results live under `results/2026-09-17-go/` at the repository root and
-are gitignored, including dependency audits and HTTP comparison medians.

@@ -33,11 +33,11 @@ def verify_echo(socket_path):
         client.close()
 
 
-def measure(command, marker, socket_path, directory, cwd):
+def measure(command, marker, socket_path, directory, cwd, env=None):
     (directory / "command.json").write_text(json.dumps(command, indent=2) + "\n")
     with (directory / "server.log").open("wb") as log, selectors.DefaultSelector() as selector:
         start = time.perf_counter_ns()
-        process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+        process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
         try:
             selector.register(process.stdout, selectors.EVENT_READ)
             pending = b""
@@ -111,9 +111,8 @@ def main():
                 raise RuntimeError(f"socket path already exists: {socket_path}")
             if language == "go":
                 command = [str(artifacts[language]), "-db", str(database), "-socket", str(socket_path)]
-                # The application's earlier 'Listening on' line precedes bind.
-                # Hertz emits this transport log after creating the listener.
-                marker = f"HTTP server listening on address={socket_path}".encode()
+                # Go logs after net.Listen succeeds, before FastHTTP's accept loop.
+                marker = f"Listening on {socket_path}".encode()
                 cwd = ROOT / "go"
             else:
                 command = [args.java, "-server", "-XX:+PerfDisableSharedMem", "--enable-native-access=ALL-UNNAMED",

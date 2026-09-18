@@ -2,22 +2,20 @@ package main
 
 import (
 	"context"
+	json "encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"regexp"
-	"sync/atomic"
+	"runtime"
 	"syscall"
 	"time"
 
-	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/cloudwego/hertz/pkg/common/config"
-	"github.com/cloudwego/hertz/pkg/protocol/consts"
-	json "github.com/goccy/go-json"
+	"github.com/valyala/fasthttp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -47,10 +45,10 @@ func validate(p NewPost) []string {
 	return errs
 }
 
-func writeJSON(ctx *app.RequestContext, status int, value any) {
+func writeJSON(ctx *fasthttp.RequestCtx, status int, value any) {
 	data, err := json.Marshal(value)
 	if err != nil {
-		writeError(ctx, consts.StatusInternalServerError, "encode JSON")
+		writeError(ctx, fasthttp.StatusInternalServerError, "encode JSON")
 		return
 	}
 	ctx.SetStatusCode(status)
@@ -58,81 +56,71 @@ func writeJSON(ctx *app.RequestContext, status int, value any) {
 	ctx.Response.SetBodyRaw(data)
 }
 
-func newHandler(store *postStore) app.HandlerFunc {
-	return func(_ context.Context, ctx *app.RequestContext) {
+func newHandler(store *postStore) fasthttp.RequestHandler {
+	return func(ctx *fasthttp.RequestCtx) {
 		path := string(ctx.Path())
+		if path != "/echo" && path != "/posts" {
+			writeError(ctx, fasthttp.StatusNotFound, "not found")
+			return
+		}
 		if !ctx.IsPost() {
-			writeError(ctx, consts.StatusMethodNotAllowed, "method must be POST")
+			writeError(ctx, fasthttp.StatusMethodNotAllowed, "method must be POST")
 			ctx.Response.Header.Set("Allow", "POST")
 			return
 		}
 		var body NewPost
 		if err := json.Unmarshal(ctx.Request.Body(), &body); err != nil {
-			writeError(ctx, consts.StatusBadRequest, "invalid JSON body")
+			writeError(ctx, fasthttp.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		if path == "/echo" {
-			writeJSON(ctx, consts.StatusOK, &body)
+			writeJSON(ctx, fasthttp.StatusOK, &body)
 			return
 		}
 		if errs := validate(body); len(errs) > 0 {
-			writeJSON(ctx, consts.StatusBadRequest, errs)
+			writeJSON(ctx, fasthttp.StatusBadRequest, errs)
 			return
 		}
 		post, err := store.create(body)
 		if err != nil {
 			log.Printf("create post: %v", err)
-			writeError(ctx, consts.StatusInternalServerError, "database error")
+			writeError(ctx, fasthttp.StatusInternalServerError, "database error")
 			return
 		}
-		writeJSON(ctx, consts.StatusCreated, &post)
+		writeJSON(ctx, fasthttp.StatusCreated, &post)
 	}
 }
 
-func writeError(ctx *app.RequestContext, status int, message string) {
+func writeError(ctx *fasthttp.RequestCtx, status int, message string) {
 	ctx.SetStatusCode(status)
 	ctx.SetContentType("text/plain; charset=utf-8")
 	ctx.SetBodyString(message)
 }
 
-func newHTTPServer(socketFile string, port int, handler app.HandlerFunc) *server.Hertz {
-	options := []config.Option{server.WithReadTimeout(10 * time.Second), server.WithIdleTimeout(10 * time.Second)}
-	if port > 0 {
-		options = append(options, server.WithHostPorts(fmt.Sprintf(":%d", port)))
-	} else {
-		options = append(options, server.WithNetwork("unix"), server.WithHostPorts(socketFile))
-	}
-	h := server.New(options...)
-	h.Any("/echo", handler)
-	h.Any("/posts", handler)
-	return h
+func newHTTPServer(handler fasthttp.RequestHandler) *fasthttp.Server {
+	return &fasthttp.Server{Handler: handler, ReadTimeout: 10 * time.Second, IdleTimeout: 10 * time.Second}
 }
 
-func serve(ctx context.Context, h *server.Hertz) error {
+func serve(ctx context.Context, h *fasthttp.Server, listener net.Listener) error {
+	defer listener.Close()
 	if ctx.Err() != nil {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var finished atomic.Bool
 	var group errgroup.Group
-	group.Go(func() error {
-		defer func() { finished.Store(true); cancel() }()
-		return h.Run()
-	})
+	group.Go(func() error { defer cancel(); return h.Serve(listener) })
 	group.Go(func() error {
 		<-ctx.Done()
-		// Cancellation can arrive during startup; do not call Shutdown before
-		// Hertz has initialized its listener, or wait after Run has failed.
-		for !h.IsRunning() {
-			if finished.Load() {
-				return nil
-			}
-			time.Sleep(time.Millisecond)
+		// Shutdown can run before Serve registers its listener. Closing the
+		// owned listener first also stops that startup race, then drains handlers.
+		_ = listener.Close()
+		if err := h.Shutdown(); err != nil && !errors.Is(err, net.ErrClosed) {
+			return err
 		}
-		return h.Shutdown(context.Background())
+		return nil
 	})
-	return group.Wait() // Complete active handlers before the caller closes SQLite.
+	return group.Wait()
 }
 
 func run(ctx context.Context, socketFile, database string, port int) (err error) {
@@ -154,12 +142,24 @@ func run(ctx context.Context, socketFile, database string, port int) (err error)
 			return err
 		}
 	}
-	h := newHTTPServer(socketFile, port, newHandler(store))
-	log.Printf("Listening on %s (SQLite %s)", h.GetOptions().Addr, store.version)
-	return serve(ctx, h)
+	network, address := "unix", socketFile
+	if port > 0 {
+		network, address = "tcp", fmt.Sprintf(":%d", port)
+	}
+	listener, err := net.Listen(network, address)
+	if err != nil {
+		return err
+	}
+	log.Printf("Listening on %s (SQLite %s)", listener.Addr(), store.version)
+	return serve(ctx, newHTTPServer(newHandler(store)), listener)
 }
 
 func main() {
+	// Two processors maximize this workload's serialized SQLite writes.
+	// An explicit GOMAXPROCS (four for echo) retains the runtime's usual control.
+	if os.Getenv("GOMAXPROCS") == "" {
+		runtime.GOMAXPROCS(2)
+	}
 	socketFile := flag.String("socket", "/tmp/benchmark.sock", "Unix domain socket")
 	database := flag.String("db", "../db/db.sqlite", "SQLite database (apply the shared migration first)")
 	port := flag.Int("port", 0, "HTTP TCP port; 0 uses the Unix socket")

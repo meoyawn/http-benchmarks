@@ -261,11 +261,7 @@ after warm-up, compared the same UTF-8 request and response bytes:
 SpanJson's stream API accepted trailing garbage. The HTTP comparison adds full
 input consumption and UTF-8 validation; it passed the integration checks but did
 not improve writes. System.Text.Json works unchanged in all three deployment modes
-and is selected. The [microbenchmark](experiments/json/Program.cs) is reproducible:
-
-```sh
-pkgx dotnet run --project experiments/json -c Release
-```
+and is selected. The table records the historical microbenchmark results.
 
 The original SQLitePCLRaw string path and Microsoft.Data.Sqlite comparison also
 truncated large text containing NUL. The corrected SQLitePCLRaw candidate uses

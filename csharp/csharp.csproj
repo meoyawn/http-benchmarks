@@ -18,8 +18,7 @@
     <PublishReadyToRunCrossgen2ExtraArgs>--instruction-set:native</PublishReadyToRunCrossgen2ExtraArgs>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="experiments/**/*.cs" />
-    <Content Remove="experiments/**;global.json" />
+    <Content Remove="global.json" />
     <Content Update="appsettings*.json" CopyToPublishDirectory="Never" Condition="'$(PublishSingleFile)' == 'true'" />
     <None Include=".tools/sqlite/lib/libsqlite3.*" Exclude="**/*.json" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
