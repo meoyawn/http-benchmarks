@@ -4,7 +4,7 @@ name = "rust-benchmark"
 version = "0.1.0"
 
 [dependencies]
-actix-web = { version = "4.15.0", default-features = false, features = ["macros"], optional = true }
+actix-web = { version = "4.15.0", default-features = false, features = ["macros"] }
 rusqlite = { version = "0.40.2", default-features = false, features = ["modern_sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -12,25 +12,7 @@ regex = { version = "1", default-features = false, features = ["std", "perf"] }
 crossbeam-channel = "0.5"
 self_cell = "1"
 mimalloc = "0.1.52"
-tokio = { version = "1", features = ["sync"], optional = true }
-may = { version = "0.3.51", optional = true }
-may_minihttp = { git = "https://github.com/meoyawn/may_minihttp", rev = "2876477511c91d04580068a66c5a8430b106b914", optional = true }
-signal-hook = { version = "0.3", optional = true }
-
-[features]
-default = ["actix"]
-actix = ["dep:actix-web", "dep:tokio"]
-may = ["dep:may", "dep:may_minihttp", "dep:signal-hook"]
-
-[[bin]]
-name = "rust-benchmark"
-path = "src/main.rs"
-required-features = ["actix"]
-
-[[bin]]
-name = "may-benchmark"
-path = "src/bin/may.rs"
-required-features = ["may"]
+tokio = { version = "1", features = ["sync"] }
 
 [dev-dependencies]
 tempfile = "3"
@@ -41,8 +23,3 @@ lto = "fat"
 codegen-units = 1
 strip = true
 panic = "abort"
-
-# MAY cancellation unwinds the listener coroutine during graceful shutdown.
-[profile.may-release]
-inherits = "release"
-panic = "unwind"

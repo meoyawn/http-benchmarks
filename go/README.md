@@ -102,31 +102,33 @@ failure and cancellation during startup.
 
 ## Final release measurements
 
-Three rotating runs per configuration on 2026-09-18, fresh processes/databases,
-50 connections, ten seconds of `/posts` then ten seconds of `/echo`, no HTTP
-warm-up. RPS, p50 and CPU are medians; RSS is the largest 100 ms sample across all
-three runs. CPU is whole-process CPU-time delta divided by elapsed wall time;
-100% is one core. Echo retains memory allocated during writes.
+Four rotating rounds per configuration on 2026-09-18, measured together with
+Rust Actix at one and three workers. Each configuration appears once in every
+order position, with fresh processes/databases, 50 connections, ten seconds of
+`/posts` then ten seconds of `/echo`, and no HTTP warm-up. RPS, p50 and CPU are
+medians; RSS is the largest 100 ms sample across all four runs. CPU sums all
+threads; 100% is one core. Echo retains memory allocated during writes.
 
 | `GOMAXPROCS` | Endpoint | RPS | p50 | Peak RSS | CPU | Start + bind |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: |
-| 2 | `/posts` | 50.7K | 0.883ms | 23.8 MiB | 150% | 8.59ms |
-| 2 | `/echo` | 270.7K | 0.165ms | 24.3 MiB | 185% | 8.59ms |
-| 4 | `/posts` | 44.1K | 1.025ms | 25.4 MiB | 216% | 8.65ms |
-| 4 | `/echo` | 333.6K | 0.129ms | 25.8 MiB | 308% | 8.65ms |
+| 2 | `/posts` | 51.4K | 0.867ms | 23.9 MiB | 148% | 9.26ms |
+| 2 | `/echo` | 270.8K | 0.167ms | 24.2 MiB | 186% | 9.26ms |
+| 4 | `/posts` | 45.0K | 0.995ms | 25.3 MiB | 216% | 8.82ms |
+| 4 | `/echo` | 341.1K | 0.128ms | 25.9 MiB | 315% | 8.82ms |
 
-Two-processor writes ranged **50.4K–50.9K**, with echo **270.3K–272.3K**.
-Four-processor writes ranged **44.0K–44.5K**, with echo **332.5K–334.0K**.
-These meet the 45K+ write and 300K+ echo targets in their respective configurations;
-the table also shows the tradeoff on the other endpoint. Every sample is retained.
-All completed requests returned the expected status, and every database passed
-integrity, foreign-key, stored-content, user-reuse and AUTOINCREMENT checks.
-The [root tables](../README.md) repeat both configurations.
+Two-processor writes ranged **51.1K–51.5K**, with echo **267.8K–272.6K**.
+Four-processor writes ranged **44.5K–45.1K**, with echo **340.1K–344.3K**.
+Every sample is retained. All completed responses and database checks passed.
+Go source and dependencies are unchanged; both configurations share one freshly
+built executable. This replaces the earlier baseline rather than attributing
+cross-sweep changes to Rust work. [PR #14](https://github.com/meoyawn/http-benchmarks/pull/14)
+records the comparison and measurement limits; the root tables repeat the results.
 
-From the repository root, after building the binary:
+From the repository root, after building both Go and Rust release binaries
+(see [Rust setup](../rust/README.md#build-and-run)):
 
 ```sh
-python3 go/measure-configs.py results/go-http --binary go/bench --gomaxprocs 2 4
+python3 rust/measure-http.py results/rust-go-http --rounds 4 --workers 1 3 --go-binary go/bench --gomaxprocs 2 4
 python3 go/measure-startup.py results/go-startup --gomaxprocs 2 4
 ```
 
@@ -135,13 +137,13 @@ configurations. Use fresh output directories. The load script records raw oha
 output, status/error distributions, RSS samples, CPU deltas and database checks.
 Up to 50 in-flight requests can commit after oha's deadline, so stored posts may
 exceed received HTTP 201 responses by at most 50. Samples and artifact hashes are
-retained under `results/go-stacks-2026-09-18/` locally (gitignored).
+retained locally under `results/actix-go-final-2026-09-18/` (gitignored).
 
 Startup uses five alternating fresh processes per setting, timed immediately
 before launching the executable until receipt of the post-bind `Listening on…`
 log. It includes runtime and SQLite initialization plus UDS binding, excludes
 builds/migration, and checks echo readiness afterward. Filesystem caches are not
-flushed. Medians are **8.59 / 8.65 ms** for two/four processors.
+flushed. Medians are **9.26 / 8.82 ms** for two/four processors.
 
 ## Build timings
 
@@ -152,7 +154,7 @@ python3 go/measure-build.py results/go-build
 python3 measure-debug-build.py results/go-debug --language go
 ```
 
-The clean release median is **20.20s**, using
+The clean release median is **19.87s**, using
 `env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -ldflags='-s -w' -o bench .`.
 Each of three samples uses a fresh `GOCACHE`, compiling the standard library,
 dependencies, bundled SQLite C, application and stripped executable. Dependency

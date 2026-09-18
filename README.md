@@ -8,13 +8,15 @@
 ## Results
 
 Apple M1 Pro **10 cores (8 performance + 2 efficiency)**, 16 GiB RAM, macOS 26.4.
-OCaml was remeasured on **2026-09-17**. Go, Kotlin JVM and GraalVM were
-fully remeasured on **2026-09-18**, including both workloads, startup, clean builds,
-debug rebuilds and artifact sizes. Rust and both C# modes (JIT and Native AOT)
-were also measured on **2026-09-18**.
-Each has three runs with fresh processes and databases;
-multi-implementation comparisons rotate their order. Each process handles `/posts` for
-10 seconds, then `/echo` for 10 seconds: `pkgx oha` **1.16.0**, 50 connections,
+Go and Rust were fully remeasured together on **2026-09-18**, after selecting
+Actix as Rust's only HTTP backend. Their four configurations have **four rotating
+rounds**, each appearing once in every order position, with fresh processes and
+databases. Startup, clean builds, debug rebuilds and artifact sizes were also
+remeasured. [Measurement details and framework decision](https://github.com/meoyawn/http-benchmarks/pull/14).
+OCaml retains its **2026-09-17** measurements; Kotlin JVM/GraalVM and both C#
+modes retain their earlier **2026-09-18** measurements. Those have three runs per
+configuration and were not part of this final Go/Rust sweep. Each process handles
+`/posts` for 10 seconds, then `/echo` for 10 seconds: `pkgx oha` **1.16.0**, 50 connections,
 no HTTP warm-up. RPS and p50 are medians; RAM is the largest sampled RSS.
 Other desktop applications remained running; benchmark loads ran sequentially.
 All other framework rows retain historical results and were not rerun.
@@ -90,14 +92,14 @@ Use `pkgx oha` if `oha` is not installed.
 
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild | Release binary size |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [Go FastHTTP (`GOMAXPROCS=2`)](go/) | 50.7K | 0.883ms | 23.8 MiB | 150% | 8.59ms | 20.20s | 1.03s | 7.78 MiB |
-| [Rust Actix (`-workers 1`)](rust/) | 48.5K | 0.954ms | 11.2 MiB | 143% | 8.10ms | 44.47s | 1.25s | 1.70 MiB |
+| [Go FastHTTP (`GOMAXPROCS=2`)](go/) | 51.4K | 0.867ms | 23.9 MiB | 148% | 9.26ms | 19.87s | 1.03s | 7.78 MiB |
+| [Rust Actix (`-workers 1`)](rust/) | 49.4K | 0.945ms | 11.1 MiB | 141% | 12.68ms | 43.20s | 1.23s | 1.70 MiB |
 | [C# .NET JIT](csharp/) | 48.4K | 0.908ms | 168.7 MiB | 320% | 166.47ms | 15.83s | 0.707s | 1.81 MiB (bundle) |
 | [C# .NET AOT](csharp/) | 48.2K | 0.906ms | 105.3 MiB | 307% | 89.28ms | 24.85s | 0.707s (JIT) | 9.19 MiB |
-| [Rust Actix (`-workers 3`)](rust/) | 46.1K | 0.995ms | 12.0 MiB | 165% | 8.76ms | 44.47s | 1.25s | 1.70 MiB |
+| [Rust Actix (`-workers 3`)](rust/) | 47.8K | 0.982ms | 11.9 MiB | 159% | 10.67ms | 43.20s | 1.23s | 1.70 MiB |
 | Kotlin Vert.x SQLite Panama (JVM) | 45.3K | 0.992ms | 170.7 MiB | 191% | 183.04ms | 21.15s | 1.09s | 15.07 MiB (JAR) |
 | [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) | 45.1K | 0.973ms | 35.6 MiB | 157% | 8.92ms | 1.12s | 0.521s | 4.60 MiB |
-| [Go FastHTTP (`GOMAXPROCS=4`)](go/) | 44.1K | 1.025ms | 25.4 MiB | 216% | 8.65ms | 20.20s | 1.03s | 7.78 MiB |
+| [Go FastHTTP (`GOMAXPROCS=4`)](go/) | 45.0K | 0.995ms | 25.3 MiB | 216% | 8.82ms | 19.87s | 1.03s | 7.78 MiB |
 | Zig http.zig | 43K | 1ms | — | — | — | — | — | — |
 | [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) | 35.1K | 1.298ms | 89.6 MiB | 261% | 10.00ms | 1.12s | 0.521s | 4.60 MiB |
 | JS Bun Hono | 21K | 1.9ms | — | — | — | — | — | — |
@@ -105,15 +107,15 @@ Use `pkgx oha` if `oha` is not installed.
 | Elixir Bandit | 10K | 4.9ms | — | — | — | — | — | — |
 | [Kotlin Vert.x SQLite Panama (GraalVM)](kotlin/#optimized-graalvm-executable) | 8.9K | 5.109ms | 104.6 MiB | 116% | 29.62ms | 149.49s | 1.09s (JVM) | 88.12 MiB |
 
-Go measures **50.7K writes/sec** with `GOMAXPROCS=2` and **333.6K echo RPS**
-with `GOMAXPROCS=4`. Their other endpoints measure **270.7K echo** and **44.1K
-writes/sec**, respectively: each row keeps its processor setting for both tests.
-All three final write samples at two processors exceed 50K (50.4K–50.9K), and all
-four-processor echo samples exceed 332K (332.5K–334.0K). Both targets are met using
-the two explicitly labeled configurations. Peak RSS is **23.8 / 24.3 MiB** for
-two-processor writes/echo and **25.4 / 25.8 MiB** for four processors.
+Go measures **51.4K writes/sec** with `GOMAXPROCS=2` and
+**341.1K echo RPS** with `GOMAXPROCS=4`. The other endpoints measure
+**270.8K echo** and **45.0K writes/sec**, respectively. Two-processor
+writes ranged **51.1K–51.5K**; four-processor echo ranged **340.1K–344.3K**.
+Go's source and dependencies are unchanged. The same freshly built executable
+serves both configurations. These new measurements replace the earlier baseline;
+changes across separate sweeps are not evidence that Rust work improved Go.
 
-The fresh Kotlin JVM measurements are **45.3K writes/sec** and **373.0K echo RPS**.
+The retained Kotlin JVM measurements are **45.3K writes/sec** and **373.0K echo RPS**.
 These are three-run medians, not the best individual samples; JVM writes ranged from 40.3K–45.4K and
 echo from 362.2K–378.2K. JVM peak sampled RSS is **170.7 / 490.3 MiB** for
 writes/echo; the echo maximum comes from the first run's higher RSS.
@@ -124,23 +126,13 @@ from **306.0K–307.8K**. It has lower throughput and sampled RSS than the JVM.
 The native write bottleneck has not been profiled. Every JVM and native run
 passed response and database checks.
 
-Rust measures **48.5K writes/sec** with one HTTP worker and
-**400.4K echo RPS** with three. The default's write runs ranged
-from 48.2K–48.5K; the 50K write target was not reached in these runs.
-The historical Rust 51K / 266K entries are replaced by these measurements.
-
-A follow-up [Rust/Go write-path investigation](rust/write-profile.md) used
-fgprof, macOS `sample`, Instruments, isolated database controls and additional
-HTTP/runtime comparisons. Rust's database control was faster; notifying its HTTP
-executor after each commit cost more in the instrumented runs. None of the tested
-alternatives reliably beat Go, so the implementation and ranking are retained.
-
-The subsequent [MAY coroutine fork evaluation](rust/may-evaluation.md) completed
-the Unix-socket, chunked-body and graceful-shutdown work from issue #12. MAY,
-Actix and Go measured 55.12K, 55.14K and 54.94K writes/sec in the same final sweep,
-with overlapping ranges. This does not establish a reliable improvement; Actix
-remains the default and these historical ranking rows are retained. The pinned
-fork is available as an experimental Rust backend, with full samples and hashes.
+Rust measures **49.4K writes/sec** with one HTTP worker and
+**415.0K echo RPS** with three. One-worker writes ranged
+**49.2K–49.7K**; three-worker echo ranged **407.1K–417.4K**.
+These are measurements of the retained Actix implementation, replacing its older
+48.5K / 400.4K entries. Compare Go and Rust within this sweep; rows from other
+languages retain earlier measurements and do not establish a controlled ranking
+against these new numbers.
 
 C# measures **48.4K writes/sec (JIT)** and **48.2K (Native AOT)**,
 with **368.8K / 349.2K echo RPS** using the same configuration for both endpoints.
@@ -187,7 +179,8 @@ are process-start measurements, not guaranteed cold-cache startup.
 the built apphost directly after resolving the runtime through `pkgx dotnet`;
 pkgx resolution is excluded from startup timing.
 The earlier ~39ms ntex result included an unconditional 25ms framework startup
-sleep; switching to Actix brings measured startup below 9ms.
+sleep. Actix removes that framework delay; the current process-start measurements
+include ordinary launch variation.
 [Startup diagnosis](rust/README.md#measured-results).
 
 **Warm debug rebuild** means an incremental development build after a public API
@@ -221,8 +214,8 @@ linking (or JVM classes/resources). Setup, downloads, source copying/edits, outp
 checks, tests and application startup are excluded. Native SQLite stays cached
 with the same optimized [shared configuration](db/sqlite-config.json).
 Raw samples, edit patches and build logs are in
-`results/debug-rebuild-2026-09-18/` (gitignored); the updated Go samples are in
-`results/go-stacks-2026-09-18/debug/`.
+`results/debug-rebuild-2026-09-18/` (gitignored); the updated Go and Rust samples
+are in `results/actix-go-final-2026-09-18/debug-builds/`.
 After the per-language toolchain/dependency setup, reproduce from the repository
 root with a fresh output directory:
 
@@ -230,8 +223,9 @@ root with a fresh output directory:
 python3 measure-debug-build.py results/debug-build
 ```
 
-**Clean release build** reports three-run medians. Go's selected stack and both
-Kotlin modes were remeasured; other languages retain their preceding measurements.
+**Clean release build** reports three-run medians. Go and Rust were remeasured
+in the final sweep. Both Kotlin modes retain their preceding remeasurement; the remaining languages retain
+their earlier measurements.
 Definitions differ by language:
 
 - [Go](go/measure-build.py): a fresh `GOCACHE` per clean build compiles the standard
@@ -292,9 +286,11 @@ The GraalVM executable is stripped and ad-hoc signed after compilation.
 System libraries are excluded. The measured Go, Kotlin and OCaml artifacts passed
 echo, committed-write and database-integrity checks. Exact byte counts, hashes,
 build commands and validation logs are in `results/release-size-2026-09-18/`
-(gitignored). Go's updated audit and measurements are in
-`results/go-stacks-2026-09-18/` (gitignored), including exact aggregates and
-artifact hashes. Other entries' binary sizes have not been measured.
+(gitignored). Go's earlier dependency audit is in
+`results/go-stacks-2026-09-18/` (gitignored). Final Go/Rust samples, verification
+results, exact aggregates and artifact hashes are retained locally under
+`results/actix-go-final-2026-09-18/` (gitignored). Other entries'
+binary sizes have not been measured.
 
 The dependency audit found one HTTP server, JSON implementation and SQLite engine
 in Rust (Actix / serde_json / rusqlite), OCaml (Cohttp / generated ATD codecs using
@@ -325,15 +321,15 @@ oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m P
 
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [Rust Actix (`-workers 3`)](rust/) | 400.4K | 0.093ms | 12.3 MiB | 223% | 8.76ms | 44.47s | 1.25s |
+| [Rust Actix (`-workers 3`)](rust/) | 415.0K | 0.092ms | 12.3 MiB | 232% | 10.67ms | 43.20s | 1.23s |
 | Kotlin Vert.x (JVM) | 373.0K | 0.096ms | 490.3 MiB | 277% | 183.04ms | 21.15s | 1.09s |
 | [C# .NET JIT](csharp/) | 368.8K | 0.116ms | 170.0 MiB | 258% | 166.47ms | 15.83s | 0.707s |
 | [C# .NET AOT](csharp/) | 349.2K | 0.126ms | 105.9 MiB | 267% | 89.28ms | 24.85s | 0.707s (JIT) |
-| [Go FastHTTP (`GOMAXPROCS=4`)](go/) | 333.6K | 0.129ms | 25.8 MiB | 308% | 8.65ms | 20.20s | 1.03s |
+| [Go FastHTTP (`GOMAXPROCS=4`)](go/) | 341.1K | 0.128ms | 25.9 MiB | 315% | 8.82ms | 19.87s | 1.03s |
 | [Kotlin Vert.x (GraalVM)](kotlin/#optimized-graalvm-executable) | 306.2K | 0.131ms | 90.1 MiB | 341% | 29.62ms | 149.49s | 1.09s (JVM) |
-| [Go FastHTTP (`GOMAXPROCS=2`)](go/) | 270.7K | 0.165ms | 24.3 MiB | 185% | 8.59ms | 20.20s | 1.03s |
+| [Go FastHTTP (`GOMAXPROCS=2`)](go/) | 270.8K | 0.167ms | 24.2 MiB | 186% | 9.26ms | 19.87s | 1.03s |
 | Zig http.zig | 264K | 0.2ms | — | — | — | — | — |
-| [Rust Actix (`-workers 1`)](rust/) | 225.1K | 0.176ms | 11.5 MiB | 94% | 8.10ms | 44.47s | 1.25s |
+| [Rust Actix (`-workers 1`)](rust/) | 224.4K | 0.172ms | 11.4 MiB | 95% | 12.68ms | 43.20s | 1.23s |
 | Python Blacksheep | 192K | 0.2ms | — | — | — | — | — |
 | [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) | 160.4K | 0.295ms | 93.2 MiB | 297% | 10.00ms | 1.12s | 0.521s |
 | JS Bun Hono | 156K | 0.3ms | — | — | — | — | — |
@@ -351,9 +347,9 @@ configuration and therefore build timings. Each C# deployment mode has its own a
 The local generated `ocaml/measurements.json` report (gitignored) contains individual
 samples, validation, CPU usage, versions and source/artifact hashes. Raw oha JSON,
 RSS samples, logs and databases are in `results/ocaml-2026-09-17/` (gitignored).
-The equivalent Rust report is `rust/measurements.json`, with raw measurements in
-`results/rust-2026-09-18/` (both gitignored). Rust reproduction commands are in
-[its README](rust/README.md#reproduce-measurements).
+Final Go/Rust samples and logs are in
+`results/actix-go-final-2026-09-18/` locally (gitignored). Rust reproduction
+commands are in [its README](rust/README.md#reproduce-measurements).
 Both Kotlin modes' complete measurements are in
 `results/kotlin-complete-2026-09-18/` (gitignored): `runtimes/summary.json` contains
 all table values, artifact/source hashes, startup checks and database verification;

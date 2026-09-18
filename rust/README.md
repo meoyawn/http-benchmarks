@@ -9,33 +9,27 @@ columns. `/echo` parses and reserializes the two request fields.
 
 | HTTP workers + one writer | Endpoint | RPS | p50 | Peak RSS | CPU | Startup |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| 1 | `/posts` | 48.5K | 0.954ms | 11.2 MiB | 143% | 8.10ms |
-| 1 | `/echo` | 225.1K | 0.176ms | 11.5 MiB | 94% | 8.10ms |
-| 3 | `/posts` | 46.1K | 0.995ms | 12.0 MiB | 165% | 8.76ms |
-| 3 | `/echo` | 400.4K | 0.093ms | 12.3 MiB | 223% | 8.76ms |
+| 1 | `/posts` | 49.4K | 0.945ms | 11.1 MiB | 141% | 12.68ms |
+| 1 | `/echo` | 224.4K | 0.172ms | 11.4 MiB | 95% | 12.68ms |
+| 3 | `/posts` | 47.8K | 0.982ms | 11.9 MiB | 159% | 10.67ms |
+| 3 | `/echo` | 415.0K | 0.092ms | 12.3 MiB | 232% | 10.67ms |
 
-Measured on the root README's M1 Pro on 2026-09-18. Each configuration has three
-fresh processes and databases, 50 connections, 10 seconds of writes followed by
-10 seconds of echo, and no HTTP warm-up. RPS, latency and CPU are medians; RAM is
-the largest sampled whole-process RSS. Both endpoints use the same worker count
-within each run. One worker is the default because it produced the most writes;
-three workers produced the most echo throughput in the worker sweep.
+Measured on the root README's M1 Pro on 2026-09-18, in the same four rotating
+rounds as both Go configurations. Every configuration appears once in each order
+position, with fresh processes/databases, 50 connections, 10 seconds of writes
+then 10 seconds of echo, and no HTTP warm-up. RPS, latency and CPU are medians;
+RAM is the largest sampled whole-process RSS. All samples are retained.
+One worker is the write default; three workers are the selected echo setting.
+Each setting is fixed for both endpoints. One-worker writes ranged
+**49.2K–49.7K**; three-worker echo ranged **407.1K–417.4K**.
 
-The default's write runs ranged from **48.2K–48.5K writes/sec**. The 50K write target was not reached in these runs. The three-worker echo runs ranged from 370.2K to 408.9K RPS.
+Actix is the only HTTP backend. The framework decision and comparison are
+documented in [PR #14](https://github.com/meoyawn/http-benchmarks/pull/14).
 
-The follow-up [write-path investigation](write-profile.md) compares Rust against
-a fresh Go control, profiles both writers, and tests Axum, direct Hyper, Smol,
-blocking HTTP, shared scheduling and wake-up changes. It includes reproducible
-`sample`, Instruments and fgprof commands. No replacement was selected.
-
-The subsequent [MAY coroutine evaluation](may-evaluation.md) implements issue #12
-with a pinned personal `may_minihttp` fork, Unix sockets, bounded chunked bodies
-and graceful shutdown. Its three-run write median was 55.12K versus 54.94K for a
-fresh Go control and 55.14K for Actix, with overlapping ranges. The fork remains
-available through the opt-in `may` feature; Actix remains the default.
-Those figures belong to the newer controlled sweep, not the historical table above.
-
-The stripped release executable is **1.70 MiB (1,784,224 bytes)**; the shared SQLite library adds **1.62 MiB**, for 3.32 MiB combined. Median build times are **44.47s clean release** and **1.25s warm incremental debug rebuild**. Both worker configurations share these build timings.
+The stripped executable is **1.70 MiB (1,784,224 bytes)**;
+the shared SQLite library adds **1.62 MiB**, for
+**3.32 MiB combined**. Median builds are **43.20s clean release** and
+**1.23s warm debug rebuild**. Both configurations share one executable.
 
 The previous ntex startup measurement around 39 ms had a concrete cause:
 [ntex-server's accept loop sleeps for 25 ms before signalling startup](https://github.com/ntex-rs/ntex/commit/ecf32afab7e977813d788822f7c063c85df35546).
@@ -204,10 +198,11 @@ python3 test-http.py --workers 3
 
 ## Reproduce measurements
 
-Build first, then run from the repository root with fresh output directories:
+Build the Rust and Go release binaries first, then run from the repository root
+with fresh output directories:
 
 ```sh
-python3 rust/measure-http.py results/rust-http --workers 1 3
+python3 rust/measure-http.py results/rust-go-http --rounds 4 --workers 1 3 --go-binary go/bench --gomaxprocs 2 4
 python3 rust/measure-startup.py results/rust-startup-1 --workers 1
 python3 rust/measure-startup.py results/rust-startup-3 --workers 3
 python3 rust/measure-build.py results/rust-build
@@ -241,10 +236,10 @@ the optimized shared SQLite engine stay cached; Cargo recompiles the application
 and links. Each edit uses a fresh name in a disposable copy, and changed binary
 hashes verify each rebuild. Downloads, setup, tests, source edits/copying and output
 checks are excluded. Samples and patches from 2026-09-18 are in
-`../results/debug-rebuild-2026-09-18/` (gitignored).
+`../results/actix-go-final-2026-09-18/debug-builds/rust/` (gitignored).
 
-The local `measurements.json` report and raw data in
-`../results/rust-2026-09-18/actix/` are gitignored. Framework, codec and channel
+Final samples and logs in `../results/actix-go-final-2026-09-18/` are gitignored. The earlier
+`measurements.json` and `../results/rust-2026-09-18/actix/` remain historical. Framework, codec and channel
 comparisons, source snapshots and startup diagnostics are in
 `../results/rust-actix-recheck/`; the earlier microbenchmarks are in
 `../results/rust-selection/`.
