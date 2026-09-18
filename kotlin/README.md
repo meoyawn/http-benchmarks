@@ -35,7 +35,6 @@ Measured on 2026-09-17, Apple M1 Pro, 16 GiB RAM, macOS 26.4.
 | Netty, aligned with the Vert.x BOM | 4.2.18.Final |
 | [fastjson2](https://github.com/alibaba/fastjson2) | 2.0.65 |
 | Kotlin coroutines | 1.11.0 |
-| Jackson, retained for Vert.x configuration and the optional PostgreSQL path | 2.22.2 |
 | [SQLite](https://sqlite.org/download.html), compiled from pinned source | 3.53.4 |
 | [jextract](https://jdk.java.net/jextract/) | 25-jextract+2-4 |
 | [Gradle](https://gradle.org/releases/) / [Shadow](https://plugins.gradle.org/plugin/com.gradleup.shadow) | 9.7.1 / 9.6.1 |
@@ -47,6 +46,10 @@ jextract's bundled Java 25 runs the generator only. Compilation, tests and the
 server use Java 26 and its stable Foreign Function & Memory API; no preview flags.
 The production build contains the selected stack only; experimental comparison
 sources, dependencies and Gradle tasks are not included.
+fastjson2 is the only bundled JSON implementation. `FastJsonFactory` supplies
+Vert.x's JSON SPI for configuration, JSON wrappers and the optional PostgreSQL
+path. Jackson is excluded from all Gradle configurations; the unused JSON-schema
+dependency is removed and WebClient is test-only.
 
 ## Build and run
 
@@ -63,7 +66,7 @@ curl -fL 'https://download.java.net/java/early_access/jextract/25/2/openjdk-25-j
 echo '3dd1dd1bde059d271739e2cc2290c64f93f85488c86c01e566c0e374eece798f  .tools/jextract.tar.gz' | shasum -a 256 -c -
 tar -xzf .tools/jextract.tar.gz -C .tools
 
-./gradlew test shadowJar
+./gradlew test buildJit
 
 # Once, for a fresh database; reuse an already migrated database as-is.
 sqlite3 -bail ../db/db.sqlite < ../db/migrations/001_init.up.sql
@@ -77,12 +80,29 @@ Downloads are cached in `.tools`; subsequent builds support Gradle's `--offline`
 Set `CC` to select another C compiler. The Gradle distribution and SQLite archive
 are pinned with SHA-256 checksums.
 
+`buildJit` also stages the JAR's three native libraries in `build/jit/native`
+and trains a JDK 26 HotSpot cache at `build/jit/kotlin-bench.aot` using the packaged
+HTTP verification suite and a disposable database. It regenerates the cache when
+the JAR (including its timestamp), native libraries, training inputs or JDK change.
+The cache stores classes, linkage and method profiles; full tiered JIT compilation
+and the default GC remain enabled. This is separate from GraalVM Native Image.
+
 Without Task, run from this directory:
 
 ```fish
 "$JAVA_HOME/bin/java" -server -XX:+PerfDisableSharedMem --enable-native-access=ALL-UNNAMED \
+  "-Djava.library.path=$PWD/build/jit/native" \
+  "-Dsqlite.library=$PWD/build/jit/native/libsqlite3.dylib" \
+  -XX:AOTMode=on -XX:AOTCache=build/jit/kotlin-bench.aot \
   -Dhttp.socket=/tmp/benchmark.sock -jar build/libs/kotlin-1.0-all.jar
 ```
+
+On Linux use `libsqlite3.so`. The cache requires the matching JAR and JDK;
+`AOTMode=on` fails explicitly on an incompatible cache. Rebuild with `buildJit`
+after changing either. To use just the self-contained JAR, build with `shadowJar`
+and omit the two native-library properties and the two AOT options; this retains
+the slower per-process extraction path. Distributing the fast launch requires
+the JAR, `build/jit/native`, the cache and a matching installed JDK.
 
 The default database is `../db/db.sqlite`. Override it with
 `-Ddb.path=/absolute/path.sqlite` before `-jar`. `-Dhttp.workers=4` is the default;
@@ -94,7 +114,8 @@ it was not benchmarked in this update.
 
 ### Optimized GraalVM executable
 
-`shadowJar` / `task build` retain the optimized JDK 26 fat-JAR build. The separate
+`shadowJar` retains the standalone JDK 26 fat-JAR build; `buildJit` / `task build`
+add native staging and the HotSpot cache. The separate
 `nativeCompile` / `task build-native` target uses **Oracle GraalVM 25.3.4.1**
 (JDK **25.0.4.1**) and Native Build Tools **1.1.13**. GraalVM's current release
 line uses JDK 25, selected with `-PjavaVersion=25`; the default remains 26.
@@ -105,17 +126,24 @@ set -gx JAVA_HOME /absolute/path/to/graalvm/Contents/Home # macOS
 set -gx GRAALVM_HOME $JAVA_HOME
 set -gx JEXTRACT_HOME "$PWD/.tools/jextract-25"
 ./gradlew -PjavaVersion=25 nativeCompile
-python3 verify-executable.py --native build/native/nativeCompile/kotlin-bench
+python3 verify-executable.py --native build/native/nativeCompile/kotlin-bench \
+  "--runtime-arg=-Djava.library.path=$PWD/build/native/nativeCompile/native" \
+  "--runtime-arg=-Dsqlite.library=$PWD/build/native/nativeCompile/native/libsqlite3.dylib"
 
 # Uses the same already migrated database and system-property overrides as the JAR.
-build/native/nativeCompile/kotlin-bench -Dhttp.socket=/tmp/benchmark.sock
+build/native/nativeCompile/kotlin-bench \
+  "-Djava.library.path=$PWD/build/native/nativeCompile/native" \
+  "-Dsqlite.library=$PWD/build/native/nativeCompile/native/libsqlite3.dylib" \
+  -Dhttp.socket=/tmp/benchmark.sock
 ```
 
 On Linux, `JAVA_HOME` is the extracted GraalVM directory itself. The build enables
 `-O3`, `-march=native` and FFM native access, with no JVM fallback. Host-CPU targeting
 means the executable is intended for the build CPU or a compatible CPU. It embeds
 the same SQLite library and Netty native transport resources as the JAR; no JDK
-is required to run it. Distribute the executable together with any adjacent
+is required to run it. The build also stages the same native libraries in the
+adjacent `native/` directory for reuse by `task start-native`. Distribute that
+directory and the executable together with any adjacent
 GraalVM runtime libraries (`libmanagement_ext.dylib` on the measured macOS ARM64
 build). The executable is stripped and ad-hoc signed on macOS.
 The native Linux and PostgreSQL paths have not been validated here.
@@ -132,50 +160,69 @@ the native build instead initializes fastjson2 at runtime so its fallback paths
 can run. This setting does not change the JVM build.
 
 To return to the JDK 26 fat JAR, reset `JAVA_HOME` to JDK 26 and run
-`./gradlew test shadowJar`. `task start` runs the JAR; `task start-native` runs the
+`./gradlew test buildJit`. `task start` runs the cached JVM; `task start-native` runs the
 native executable. `task test-native` builds and checks the packaged native server.
 
 The measured macOS ARM64 toolchain archive is
 [`graalvm-jdk-25i3-25.0.4.1_macos-aarch64_bin.tar.gz`](https://gds.oracle.com/download/graal/25i3/archive/graalvm-jdk-25i3-25.0.4.1_macos-aarch64_bin.tar.gz),
 SHA-256 `8411c28344f47726c433a2fbf0fa399c199531802d458a917d4a05b106043141`.
 
-Reproduce native measurements with GraalVM selected as above:
+Reproduce the complete comparison in this order, running one measurement at a time:
 
 ```fish
-# Resolve dependencies/metadata online once before timing offline clean builds.
-./gradlew -PjavaVersion=25 nativeCompile
-python3 measure-build.py ../results/kotlin-native-build --native
-python3 verify-executable.py --native build/native/nativeCompile/kotlin-bench
-python3 measure-native.py ../results/kotlin-native
+# GraalVM/JDK 25 selected as above; downloads resolved before timing.
+python3 measure-build.py ../results/kotlin-complete/native-build --native
+
+# Switch the default JVM back to JDK 26; keep JEXTRACT_HOME unchanged.
+set -gx JAVA_HOME (brew --prefix openjdk)/libexec/openjdk.jdk/Contents/Home
+python3 measure-build.py ../results/kotlin-complete/jvm-build
+python3 ../measure-debug-build.py ../results/kotlin-complete/debug-build --language kotlin
+./gradlew test buildJit
+python3 measure-runtimes.py ../results/kotlin-complete/runtimes \
+  --build-results ../results/kotlin-complete
 ```
 
-The build runner warms compilation, then measures three `clean nativeCompile`
-builds in this project and leaves the last optimized executable in `build/`.
-No source edits occur in native mode. The HTTP runner uses three fresh processes
-and databases, each with 10 seconds of `/posts` followed by 10 seconds of `/echo`,
-50 connections and no HTTP warm-up. It also measures five fresh starts to the
-first post-bind listening log and verifies echo after each startup timer stops.
-RPS, p50, CPU and startup are medians; RSS is the maximum 100 ms sample.
-Its report includes artifact/source hashes, exact executable and runtime-library
-sizes, database validation, raw oha output, server logs and per-run metrics.
-Use fresh result directories. The retained JVM development build supplies the
-`1.30s (JVM)` debug-rebuild cell; native-image incremental rebuilds were not timed.
+The native build runner leaves the last of three clean optimized executables in
+`build/`. JVM clean-build timing uses a disposable source copy and includes the
+HotSpot cache training/assembly, alongside SQLite C, jextract, Kotlin/Java, the
+fat JAR and native-library staging. The shared debug column measures three real
+public-type-renaming rebuilds of JVM development classes; the GraalVM row labels
+this development workflow `(JVM)`. Native-image incremental rebuilds are not used
+as debug-build measurements.
 
-Measured on **2026-09-18**, the optimized native executable achieves **9.1K writes/sec**
-and **302.7K echo RPS**, with median p50 **5.038 / 0.133ms**, peak sampled RSS
-**110.5 / 95.3 MiB** and CPU **116% / 340%** respectively. The five-start median is
-**653.69ms**. Clean builds took **145.46, 149.72 and 158.63 seconds**, a **149.72s**
-median. The stripped executable is **98,732,016 bytes (94.16 MiB)**; the adjacent
-runtime library is **73,984 bytes**, making **94.23 MiB** combined.
+The runtime runner alternates three fresh JVM/GraalVM processes and databases.
+Each serves `/posts` for 10 seconds, then `/echo` for 10 seconds, at 50 connections
+and no HTTP warm-up. RPS, p50 and CPU are medians; RSS is the maximum 100 ms sample.
+It then measures seven startups per runtime, including the first echo and first
+committed post, and records artifact/source hashes, sizes, commands and database
+verification. Use fresh result directories. Current results live under
+`results/kotlin-complete-2026-09-18/` at the repository root (gitignored).
 
-Native startup and sampled RSS improve on the retained JVM measurements, while
-throughput is lower, especially for writes. The native write bottleneck has not
-been profiled. No JVM numbers were substituted for native release measurements.
+The complete **2026-09-18** rerun measures **8.9K writes/sec** and **306.2K echo
+RPS**, median p50 **5.109 / 0.131ms**, maximum sampled RSS **104.6 / 90.1 MiB**,
+and median CPU **116% / 341%** for writes/echo. Native write runs ranged from
+8.77K–8.95K, and echo from 306.0K–307.8K. The native write bottleneck remains
+unprofiled; no JVM measurements are substituted for native results.
+
+The seven-start median is **29.62ms** (**28.64–30.63ms**), with first echo and
+first committed post at **31.11 / 32.42ms** from launch. An earlier paired trial
+of the same source measured 630.98ms with per-process library extraction versus
+31.34ms with staged libraries. No database initialization is deferred past
+listening. The final clean builds took **161.69, 146.05 and 149.49 seconds**,
+a **149.49s** median including native staging, stripping and signing.
+
+The final stripped executable is **92,405,360 bytes (88.12 MiB)**. Together with
+the **73,984-byte** runtime library and **1.75 MiB** of staged native libraries,
+the fast-launch distribution is **89.95 MiB**. It needs no HotSpot cache or
+installed JDK. The **1.09s (JVM)** debug cell is the freshly measured development
+rebuild shared by both release modes.
+
 The packaged checks pass echo, JSON/schema/email validation, Unicode/NUL/large
 strings, committed responses, case-insensitive user reuse, forced rollback and
 recovery, concurrent writes, shutdown, integrity and AUTOINCREMENT accounting.
-Raw results are in `results/kotlin-native-2026-09-18/` and
-`results/kotlin-native-build-2026-09-18/` at the repository root (gitignored).
+All final HTTP runs also pass their response and database checks. Full samples,
+commands, source/artifact hashes and build logs are under
+`results/kotlin-complete-2026-09-18/` (gitignored).
 
 ## Bundled SQLite
 
@@ -185,8 +232,9 @@ binaries at runtime. This JVM build follows the same source-bundling approach,
 producing a `.dylib` on macOS or `.so` on Linux and loading it through FFM.
 
 The JAR contains the library for the build machine's OS and CPU. Rebuild on each
-target platform; it is not a universal multi-platform JAR. Runtime extraction is
-automatic and cleaned up on normal JVM exit. macOS ARM64 was tested here; the
+target platform; it is not a universal multi-platform JAR. Standalone runtime
+extraction is automatic and cleaned up on normal JVM exit. `buildJit` stages the
+same libraries once at build time so `task start` can reuse them. macOS ARM64 was tested here; the
 Linux and x86-64 build paths have not been exercised on this machine. A compatible
 external library can be selected for experiments with
 `-Dsqlite.library=/absolute/path/to/libsqlite3.dylib`.
@@ -211,51 +259,81 @@ the round trip. Failed writes reset statements and roll back before the next job
 
 ## HTTP throughput and RAM
 
-The [root tables](../README.md) report three rotating fresh-process runs with Go
-and OCaml: 10 seconds per endpoint, 50 connections, `/posts` then `/echo`, no HTTP
-warm-up. Kotlin's medians are **44.5K writes/sec** and
-**373.6K echo RPS**, above the previous 42.7K / 364.6K.
-Peak sampled RSS is **225.3 / 392.1 MiB** respectively.
+The [root tables](../README.md) now use three alternating fresh-process runs for
+JVM and GraalVM on **2026-09-18**: 10 seconds per endpoint, 50 connections,
+`/posts` then `/echo`, no HTTP warm-up. The JVM uses the staged libraries and
+HotSpot cache; GraalVM uses its staged libraries. Both endpoints keep four HTTP
+event loops and one writer.
+
+| Runtime | Writes RPS | Echo RPS | Write / echo p50 | Write / echo peak RSS | Write / echo CPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| JVM | 45.3K | 373.0K | 0.992 / 0.096ms | 170.7 / 490.3 MiB | 191% / 277% |
+| GraalVM | 8.9K | 306.2K | 5.109 / 0.131ms | 104.6 / 90.1 MiB | 116% / 341% |
+
+RPS, p50 and CPU are medians; RSS is the maximum sample across all three runs.
 RSS includes native memory and excludes oha, sampled approximately every 100 ms.
-Echo retains allocations from writes. The local generated `ocaml/measurements.json`
-report at the repository root contains all samples and integrity/content/foreign-key
-checks (gitignored).
+Echo retains allocations from writes. JVM writes ranged from **40.3K–45.4K** and
+echo from **362.2K–378.2K**; the first echo run reached 490.3 MiB RSS, while the
+other two peaked at 319.0 and 310.3 MiB. That maximum is retained in the tables.
+CPU 100% means one core.
 
-```fish
-# Both application artifacts must be built before the comparison.
-./gradlew shadowJar
-# In ../go: env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .
-python3 measure-comparison.py ../results/jvm-comparison
+Use `measure-runtimes.py` and the complete reproduction sequence above for the
+published configuration. `measure-http.py` also supports individual experiments
+with `--oha oha`, `--socket /tmp/another.sock`, `--native`, and repeatable
+`--jvm-arg=-Dname=value` overrides. Its default is `pkgx oha`.
 
-# One Kotlin process, with a fresh database:
-python3 measure-http.py ../results/kotlin-http
-```
-
-Each script rejects an existing output database. `measure-http.py` accepts
-`--oha oha` when installed directly, `--socket /tmp/another.sock`, and repeatable
-`--jvm-arg=-Dname=value` overrides. Its default is `pkgx oha`. All completed requests
-must have the expected status. oha cancels in-flight requests at the deadline, so
-up to 50 extra posts per write run may commit without a received HTTP 201.
-The script checks row counts, stored content, user ID sequence, integrity and
-foreign keys after shutdown. Every final run passed.
+All completed requests returned the expected status. oha cancels in-flight
+requests at the deadline, so up to 50 extra posts per write run may commit without
+a received HTTP 201. Each database passed row-count, stored-content, user-ID
+sequence, integrity and foreign-key checks after shutdown. Raw samples and the
+complete report are in `results/kotlin-complete-2026-09-18/runtimes/` (gitignored).
 
 ## Binary startup
 
-The built JAR reached its first `Listening on…` log in a median **1.209s**
-across five fresh JVM processes, alternating with Go. The marker is
-emitted after Vert.x successfully binds the socket. Timing includes JVM and native
-library loading, database initialization and listening, with builds and database
-migration excluded. There is no HTTP warm-up or filesystem cache flushing; an
-echo request verifies readiness after the timer stops.
+On 2026-09-18 the final cached JVM starts in **183.04ms** median across seven fresh
+processes (**179.30–187.10ms**), down from the reproduced **1,204.91ms** baseline.
+Every launch opens SQLite and prepares its statements before the post-bind
+`Listening on…` log. Median launch-to-first-echo is **223.44ms**; the following
+first committed post completes at **239.88ms**. The respective ranges are
+218.71–226.50ms and 233.92–241.95ms. Readiness includes the real database path.
 
-With both application artifacts built and `JAVA_HOME` pointing to JDK 26:
+JFR native-method samples and `-Xlog:class+init=info` exposed three gaps in
+`NativeLibraries.load`: about **254ms for Netty kqueue**, **212ms for Netty DNS**,
+and **225ms for SQLite** in the instrumented baseline. Reusing the same native
+files, instead of extracting fresh temporary copies each process, reduced the
+unmodified baseline's five-start median to **485.38ms**. The remaining class
+loading/linking work is reduced by the
+[JDK HotSpot AOT cache](https://docs.oracle.com/en/java/javase/26/docs/specs/man/java.html).
+No JIT tier limit, alternate GC, disabled verification or deferred database
+initialization is used. Jackson was also removed; fastjson2 now supplies the
+Vert.x JSON SPI. Removing Jackson alone was not the main startup improvement.
+
+`buildJit` creates the cache through `verify-executable.py`, exercising echo,
+committed writes, validation and rollback against a disposable database. Cache
+creation and native staging happen during the build and are excluded from startup.
+The **15.07 MiB** JAR, **40.97 MiB** cache and **1.75 MiB** native directory total
+**57.80 MiB**, excluding the installed JDK. The standalone JAR remains available
+without the cache, with slower extraction and class loading.
 
 ```fish
-python3 ../measure-startup.py ../results/startup
+./gradlew test buildJit
+python3 measure-startup.py ../results/kotlin-startup --modes bundled libraries cached
+# Profile a separate run; these instrumented timings are not benchmark results.
+python3 measure-startup.py ../results/kotlin-startup-profile --modes bundled --rounds 1 --profile
 ```
 
-The [root tables](../README.md) show the same startup time for both endpoints.
-Logs, commands, individual samples and artifact hashes are saved with the summary.
+All times start immediately before `Popen`; the first echo and post follow the
+post-bind log, and the post is checked for visibility in a separate connection.
+Each launch uses a fresh migrated database, with no HTTP warm-up or filesystem
+cache flushing. This measures fresh processes with warm filesystem caches, not
+cold-disk startup. The root tables use the final complete rerun's seven-start measurements.
+Earlier seven-run checks measured 190.86–224.05ms; a separate run overlapping
+background compilation measured 343.41ms and is retained as contention data.
+
+The final commands, logs, samples and artifact hashes are in
+`results/kotlin-complete-2026-09-18/runtimes/jvm-startup/summary.json` and
+`graalvm-startup/summary.json`. Exploratory comparisons and JFR recordings are
+retained in `results/kotlin-startup-2026-09-18/` (all gitignored).
 
 ## Library comparisons
 
@@ -330,32 +408,35 @@ python3 measure-build.py ../results/kotlin-build
 python3 ../measure-debug-build.py ../results/kotlin-debug-build --language kotlin
 ```
 
-The first script supplies the **18.21s clean release** median from three
-`clean shadowJar` builds. This includes native SQLite C compilation, jextract,
-Kotlin/Java compilation and fat-JAR packaging. Its additional release rebuild
-samples are not used in the root tables.
+The first script supplies the **21.15s clean JVM release** median from three
+`clean buildJit` runs (**21.204, 21.102 and 21.145 seconds**). This includes native
+SQLite C compilation, jextract, Kotlin/Java compilation, the fat JAR, native
+staging and verified HotSpot cache training/assembly. Additional release rebuild
+samples (**4.791, 4.783 and 4.771 seconds**) are retained separately and are not
+the debug column. GraalVM's three clean builds have a **149.49s** median.
 
-The second script supplies the **1.30s warm debug rebuild** median, remeasured on
-2026-09-18 with **OpenJDK 26.0.2.1**. It runs
+The debug runner supplies the **1.09s warm development rebuild** median, from
+**1.101, 1.086 and 1.060 seconds**, on **OpenJDK 26.0.2.1**. It runs
 `./gradlew --offline --no-build-cache -Pkotlin.incremental=true classes`, the
 compilation/resources prerequisite of `application run`. The task graph is checked
 with `run --dry-run`; no server starts and no JAR is packaged. JVM classes retain
 line-number and local-variable debug metadata, verified with `javap -c -l`.
+Both release-mode rows use this development workflow; GraalVM labels it `(JVM)`.
 
-After an excluded warm-up and no-change control, each of three samples renames
-the public `NewPost` type and all consumers across five Kotlin files. Gradle and
+After an excluded warm-up and no-change control, each debug sample renames the
+public `NewPost` type and its consumers across five Kotlin files. Gradle and
 Kotlin daemons, incremental state, dependencies, generated bindings and native
 SQLite remain warm. Changed class hashes verify recompilation of the type and
-its callers. The JVM build and debug runners use disposable source copies; tests, downloads,
-setup and source edits are excluded from timing. The separate native clean-build
-mode builds in this project without source edits. Debug samples, patches and task logs
-are in `results/debug-rebuild-2026-09-18/` at the repository root (gitignored).
-The earlier clean release samples remain in the local generated
-`ocaml/measurements.json` report.
+its callers. JVM clean-build and debug measurements use disposable source copies;
+unit tests, downloads, copying and edits are excluded from timing. Cache training
+and its HTTP verification are included in `buildJit`. Native clean builds run in
+this project without source edits and leave the final executable available.
+All build samples, patches and task logs are under
+`results/kotlin-complete-2026-09-18/{jvm-build,native-build,debug-build}/`.
 
 Tests cover the HTTP endpoints and validation, JSON escaping and invalid schemas,
 large strings and embedded NULs, case-insensitive user reuse and AUTOINCREMENT gaps,
 rollback/recovery, queued writes and orderly shutdown, and missing databases.
-Raw HTTP/RSS logs, JMH JSON and build timings from this update are saved locally
-under `results/jvm-optimization/`; the final shared-configuration measurements
-are under `results/ocaml-2026-09-17/` (both gitignored).
+Current HTTP/RSS and build measurements are under `results/kotlin-complete-2026-09-18/`.
+Earlier library-comparison JMH output remains under `results/jvm-optimization/`
+(all gitignored).

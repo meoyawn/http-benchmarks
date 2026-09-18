@@ -1,8 +1,5 @@
 package bench
 
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.module.paramnames.ParameterNamesModule
-import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.HttpServer
@@ -68,12 +65,6 @@ class App(private val sharedWriter: PostWriter? = null) : CoroutineVerticle() {
 
     private companion object {
         val logger = System.getLogger(App::class.java.name)
-
-        init {
-            DatabindCodec.mapper()
-                .registerModules(ParameterNamesModule())
-                .enable(JsonParser.Feature.INCLUDE_SOURCE_IN_LOCATION)
-        }
     }
 
     private var pg: Pool? = null
