@@ -1,20 +1,40 @@
 .{
     .name = .http_benchmarks,
     .fingerprint = 0xbed07cf7e4a3f7a4,
-    .version = "0.1.0",
-    .minimum_zig_version = "0.15.2",
+    .version = "0.2.0",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .httpz = .{
-            .url = "git+https://github.com/karlseguin/http.zig#1a4d53b95bc4ac6c84cbc081727428de40c8c635",
-            .hash = "httpz-0.0.0-PNVzrNVOBwDlxyffzwONpI9j9dYqKWXxopU1ZCLt4C09",
+            .url = "git+https://github.com/karlseguin/http.zig#9b14af98fde5e98abb9a8376fe02b42003e835bf",
+            .hash = "httpz-0.0.0-PNVzrMgTCQDhzfBLRRebTx9LU056Ph2erdN9-42rFbhj",
         },
-        .sqlite = .{
-            .url = "git+https://github.com/vrischmann/zig-sqlite#29c0e65a80b38203c010ed31e7a72d2f804649a5",
-            .hash = "sqlite-3.48.0-F2R_a8eODgCnwT0ssaQUTNrsbDeDOtmuOPzF33cgvN13",
+        .zap = .{
+            .url = "git+https://github.com/zigzap/zap#b12c07dd8cbbbacb2aa52790fb87fb2af185023f",
+            .hash = "zap-0.10.6-GoeB8y-IJAD3m9zkAkeTQalzU1NuvO072u8hA78Irdp8",
         },
-        .mvzr = .{
-            .url = "https://github.com/mnemnion/mvzr/archive/refs/tags/v0.3.12.tar.gz",
-            .hash = "mvzr-0.3.9-ZSOky6t2AQCA7efmm5EYbPb5sOdbXa4EFsUgYbQ6hZv9",
+        .zqlite = .{
+            .url = "git+https://github.com/karlseguin/zqlite.zig#b519eea9b1a2b5fcad68af6d0629e717e8746684",
+            .hash = "zqlite-0.0.1-RWLaY8M8nAB4m0tlSpT9A5PGUwX_JfWC5VlPjLe7lG2Q",
+        },
+        .ndsqlite = .{
+            .url = "git+https://github.com/nDimensional/zig-sqlite#13ae705f63fd6a8e80f7455331cec3283f7af8fc",
+            .hash = "sqlite-0.4.0-3530400-djiKTqCBAABHXUUl2aELLHGlgn7KILPiJCl5Vv6t91BB",
+        },
+        .serde = .{
+            .url = "git+https://github.com/OrlovEvgeny/serde.zig#b378c4c7392c0eead087000e455e3b108b4b590f",
+            .hash = "serde-1.2.2-1DszTxNsGQB0pwXk4nyJcSPq0_Z2XLXrZY0ISwq5nARW",
+        },
+        .yyjson = .{
+            .url = "https://github.com/ibireme/yyjson/archive/refs/tags/0.12.0.tar.gz",
+            .hash = "N-V-__8AADJobAAfcT3EULUqTBZto6rfWBxzeDyfBxrSCP_b",
+        },
+        .zio = .{
+            .url = "git+https://github.com/lalinsky/zio#54cb18f05d3feaec431353de85d5d10dac93d37b",
+            .hash = "zio-0.17.0-xHbVVELgKQBIzMAdDWTrIamBlTyFlijzxFU7G4f2NUcw",
+        },
+        .dusty = .{
+            .url = "git+https://github.com/lalinsky/dusty#1d7139b80c21e3ebd76aa5cdefbb51001273b5c1",
+            .hash = "dusty-0.1.0-Qdw7RqISIAAPcvEODWUkl0bJQciYvRAGJNdYUevKobfq",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },

@@ -1,273 +1,106 @@
+//! Standard HTTP parser with zio's coroutine implementation of std.Io.
 const std = @import("std");
-const httpz = @import("httpz");
-const sqlite = @import("sqlite");
-const mvzr = @import("mvzr");
-
-const Allocator = std.mem.Allocator;
-
-const String = []const u8;
-
-const INSERT_USER = "INSERT OR IGNORE INTO users (email) VALUES (?);";
-
-const INSERT_POST =
-    \\ INSERT INTO posts   (content,   user_id)
-    \\ SELECT              ?,          id
-    \\ FROM        users
-    \\ WHERE       email = ?
-    \\ RETURNING   id, user_id, content, created_at, updated_at;
-;
-
-const Post = struct {
-    id: i64,
-    user_id: i64,
-    content: String,
-    created_at: i64,
-    updated_at: i64,
-
-    fn deinit(self: Post, alloc: Allocator) void {
-        alloc.free(self.content);
-    }
-};
-
-const App = struct {
-    db: sqlite.Db,
-    insertUser: sqlite.Statement(.{}, sqlite.ParsedQuery(INSERT_USER)),
-    insertPost: sqlite.Statement(.{}, sqlite.ParsedQuery(INSERT_POST)),
-    writeMutex: std.Thread.Mutex = std.Thread.Mutex{},
-};
-
-const OPEN_PRAGMAS =
-    \\ PRAGMA journal_mode = wal;
-    \\ PRAGMA synchronous = normal;
-    \\ PRAGMA foreign_keys = on;
-    \\ PRAGMA busy_timeout = 10000;
-    \\ PRAGMA optimize = 0x10002;
-;
-
-fn openPragmas(conn: *sqlite.Db) !void {
-    var it = std.mem.splitScalar(u8, OPEN_PRAGMAS, '\n');
-    while (it.next()) |expr| {
-        // exec throws because pragma returns a result
-        _ = try conn.oneDynamic(void, expr, .{}, .{});
-    }
-}
-
-pub fn main() !void {
-    const allocator = std.heap.smp_allocator;
-
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-    var socket: []const u8 = "/tmp/benchmark.sock";
-    var database: [:0]const u8 = "../db/db.sqlite";
-    var index: usize = 1;
-    while (index < args.len) : (index += 2) {
-        if (index + 1 >= args.len) return error.MissingArgument;
-        if (std.mem.eql(u8, args[index], "-db")) {
-            database = args[index + 1];
-        } else if (std.mem.eql(u8, args[index], "-socket")) {
-            socket = args[index + 1];
-        } else return error.UnknownArgument;
-    }
-    if (sqlite.c.sqlite3_initialize() != sqlite.c.SQLITE_OK) return error.SqliteInitialization;
-
-    var db = try sqlite.Db.init(.{
-        .mode = sqlite.Db.Mode{ .File = database },
-        .open_flags = .{
-            .write = true,
+const zio = @import("zio");
+const app = @import("app");
+pub fn main(init: std.process.Init) !void {
+    const options = try app.Options.parse(init);
+    if (std.Io.Dir.cwd().statFile(init.io, options.socket, .{ .follow_symlinks = false })) |_| return error.SocketAlreadyExists else |err| if (err != error.FileNotFound) return err;
+    var writer = try app.Writer.init(init.io, options.database);
+    try writer.start();
+    defer writer.stop();
+    const rt = try zio.Runtime.init(app.allocator, .{ .executors = .exact(@intCast(options.workers)) });
+    defer rt.deinit();
+    const io = rt.io();
+    var terminate = try zio.Signal.init(.terminate);
+    defer terminate.deinit();
+    var interrupt = try zio.Signal.init(.interrupt);
+    defer interrupt.deinit();
+    const addr = try std.Io.net.UnixAddress.init(options.socket);
+    var listener = try addr.listen(io, .{});
+    defer listener.deinit(io);
+    defer std.Io.Dir.deleteFileAbsolute(init.io, options.socket) catch {};
+    std.debug.print("Listening on {s} (std.http + zio, {d} executors + 1 SQLite writer)\n", .{ options.socket, options.workers });
+    var serving = try rt.spawn(serve, .{ io, &listener, &writer });
+    const stopped = try zio.select(.{ .terminate = &terminate, .interrupt = &interrupt, .server = &serving });
+    switch (stopped) {
+        .server => |result| try result,
+        else => {
+            serving.cancel();
+            serving.join() catch |err| if (err != error.Canceled) return err;
         },
-        .threading_mode = .SingleThread,
-    });
-    defer {
-        db.exec("PRAGMA optimize;", .{}, .{}) catch |err| std.debug.panic("Couldn't PRAGMA optimize: {}", .{err});
-        db.deinit();
     }
-
-    try openPragmas(&db);
-
-    var insertUser = try db.prepare(INSERT_USER);
-    defer insertUser.deinit();
-
-    var insertPost = try db.prepare(INSERT_POST);
-    defer insertPost.deinit();
-
-    var app = App{
-        .db = db,
-        .insertUser = insertUser,
-        .insertPost = insertPost,
-    };
-
-    var server = try httpz.Server(*App).init(
-        allocator,
-        .{
-            .address = .{ .unix = socket },
-            .workers = .{ .count = 1 },
-            .thread_pool = .{ .count = 4, .buffer_size = 16384 },
-        },
-        &app,
-    );
-    defer {
-        server.stop();
-        server.deinit();
+}
+fn serve(io: std.Io, listener: *std.Io.net.Server, writer: *app.Writer) !void {
+    var group: std.Io.Group = .init;
+    defer group.cancel(io);
+    while (true) {
+        const stream = try listener.accept(io);
+        group.concurrent(io, connection, .{ io, stream, writer }) catch |err| {
+            stream.close(io);
+            return err;
+        };
     }
-    var router = try server.router(.{});
-    router.post("/posts", httpPost, .{});
-    router.post("/echo", httpEcho, .{});
-
-    std.debug.print("Listening on {s}\n", .{socket});
-    try server.listen();
 }
-
-const NewPost = struct {
-    content: String,
-    email: String,
-};
-
-const VALID_EMAIL = mvzr.compile("^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$").?;
-
-fn isValidEmail(email: String) bool {
-    return VALID_EMAIL.isMatch(email);
+fn connection(io: std.Io, stream: std.Io.net.Stream, writer: *app.Writer) void {
+    defer stream.close(io);
+    process(io, stream, writer) catch {};
 }
-
-fn validate(alloc: Allocator, np: NewPost) !std.array_list.Managed(String) {
-    var errs = try std.array_list.Managed(String).initCapacity(alloc, 2);
-
-    if (np.content.len == 0) {
-        try errs.append("content: should not be empty");
+fn send(req: *std.http.Server.Request, status: std.http.Status, body: []const u8) !void {
+    try req.respond(body, .{ .status = status, .extra_headers = &.{.{ .name = "content-type", .value = "application/json" }} });
+}
+fn process(io: std.Io, stream: std.Io.net.Stream, writer: *app.Writer) !void {
+    var read_buffer: [16384]u8 = undefined;
+    var write_buffer: [16384]u8 = undefined;
+    var reader = stream.reader(io, &read_buffer);
+    var output = stream.writer(io, &write_buffer);
+    var server = std.http.Server.init(&reader.interface, &output.interface);
+    var arena = std.heap.ArenaAllocator.init(app.allocator);
+    defer arena.deinit();
+    while (true) {
+        _ = arena.reset(.{ .retain_with_limit = 16384 });
+        const alloc = arena.allocator();
+        var req = try server.receiveHead();
+        const keep_alive = req.head.keep_alive;
+        const is_post = req.head.method == .POST;
+        const path = std.mem.sliceTo(req.head.target, '?');
+        const posts = std.mem.eql(u8, path, "/posts");
+        const echo = std.mem.eql(u8, path, "/echo");
+        var body_buffer: [4096]u8 = undefined;
+        const body_reader = try req.readerExpectContinue(&body_buffer);
+        const body = body_reader.allocRemaining(alloc, .limited(app.body_limit)) catch {
+            try req.respond("", .{ .status = .payload_too_large, .keep_alive = false });
+            return;
+        };
+        if (!is_post or (!posts and !echo)) {
+            try send(&req, .not_found, "\"not found\"");
+        } else if (app.json.parse(app.NewPost, alloc, body)) |value| {
+            if (echo) {
+                try send(&req, .ok, try app.json.stringify(alloc, value));
+            } else if (!value.valid()) {
+                try send(&req, .bad_request, "\"invalid content or email\"");
+            } else {
+                var event: zio.Event = .init;
+                var job: app.Job = .{ .arena = .init(app.allocator), .input = value, .context = &event, .complete = completed };
+                defer job.arena.deinit();
+                const accepted = blk: {
+                    const protection = io.swapCancelProtection(.blocked);
+                    defer _ = io.swapCancelProtection(protection);
+                    writer.submit(&job) catch break :blk false;
+                    try event.wait();
+                    break :blk true;
+                };
+                if (!accepted) {
+                    try send(&req, .service_unavailable, "\"writer unavailable\"");
+                    if (!keep_alive) return;
+                    continue;
+                }
+                if (job.result) |post| try send(&req, .created, try app.json.stringify(alloc, post)) else |_| try send(&req, .internal_server_error, "\"write failed\"");
+            }
+        } else |_| try send(&req, .bad_request, "\"invalid JSON\"");
+        if (!keep_alive) return;
     }
-
-    if (!isValidEmail(np.email)) {
-        const err = try std.fmt.allocPrint(alloc, "email: invalid: {s}", .{np.email});
-        try errs.append(err);
-    }
-
-    return errs;
 }
-
-fn deinitList(arr: std.array_list.Managed(String)) void {
-    for (arr.items) |value| {
-        arr.allocator.free(value);
-    }
-
-    arr.deinit();
-}
-
-fn beginImmediate(conn: *sqlite.Db) !void {
-    return conn.exec("BEGIN IMMEDIATE TRANSACTION;", .{}, .{});
-}
-
-fn rollback(conn: *sqlite.Db) void {
-    return conn.exec("ROLLBACK;", .{}, .{}) catch |err| std.debug.panic("Couldn't ROLLBACK: {}", .{err});
-}
-
-fn commit(db: *sqlite.Db) !void {
-    return db.exec("COMMIT;", .{}, .{});
-}
-
-fn transact(alloc: Allocator, app: *App, body: NewPost) !Post {
-    app.writeMutex.lock();
-    defer app.writeMutex.unlock();
-
-    try beginImmediate(&app.db);
-    errdefer rollback(&app.db);
-
-    try app.insertUser.exec(.{}, .{body.email});
-    app.insertUser.reset();
-
-    const post = try app.insertPost.oneAlloc(Post, alloc, .{}, .{ body.content, body.email });
-    app.insertPost.reset();
-
-    errdefer post.?.deinit(alloc);
-
-    try commit(&app.db);
-
-    return post orelse error.EmptyQuery;
-}
-
-fn httpPost(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
-    const body: NewPost = try req.json(NewPost) orelse {
-        res.status = 400;
-        return res.json("POST body", .{});
-    };
-
-    const errs = try validate(req.arena, body);
-    defer deinitList(errs);
-    if (errs.items.len > 0) {
-        res.status = 400;
-        return res.json(errs.items, .{});
-    }
-
-    const post = try transact(req.arena, app, body);
-    defer post.deinit(req.arena);
-
-    res.status = 201;
-    return res.json(post, .{});
-}
-
-fn httpEcho(_: *App, req: *httpz.Request, res: *httpz.Response) !void {
-    const body: NewPost = try req.json(NewPost) orelse {
-        res.status = 400;
-        return res.json("POST body", .{});
-    };
-    return res.json(body, .{});
-}
-
-test "invalid post" {
-    const t = std.testing;
-
-    const errs = try validate(t.allocator, NewPost{ .content = "hello", .email = "gmail.com" });
-    defer deinitList(errs);
-
-    try t.expectEqual(1, errs.items.len);
-    try t.expectEqualStrings("email: invalid: gmail.com", errs.items[0]);
-}
-
-test "valid post" {
-    const t = std.testing;
-
-    const errs = try validate(t.allocator, NewPost{ .content = "hello", .email = "foo@gmail.com" });
-    defer deinitList(errs);
-
-    try t.expectEqual(0, errs.items.len);
-}
-
-test "transaction" {
-    const t = std.testing;
-
-    if (sqlite.c.sqlite3_initialize() != sqlite.c.SQLITE_OK) return error.SqliteInitialization;
-    var db = try sqlite.Db.init(.{
-        .mode = .Memory,
-        .open_flags = .{
-            .write = true,
-        },
-    });
-    defer {
-        db.exec("PRAGMA optimize;", .{}, .{}) catch |err| std.debug.panic("Couldn't PRAGMA optimize: {}", .{err});
-        db.deinit();
-    }
-
-    var statements = std.mem.splitScalar(u8, @embedFile("schema"), ';');
-    while (statements.next()) |statement| {
-        const sql = std.mem.trim(u8, statement, " \r\n\t");
-        if (sql.len != 0) try db.execDynamic(sql, .{}, .{});
-    }
-    try openPragmas(&db);
-
-    var insertUser = try db.prepare(INSERT_USER);
-    defer insertUser.deinit();
-
-    var insertPost = try db.prepare(INSERT_POST);
-    defer insertPost.deinit();
-
-    var app = App{
-        .db = db,
-        .insertUser = insertUser,
-        .insertPost = insertPost,
-    };
-
-    const content = "hello";
-
-    const post = try transact(t.allocator, &app, .{ .content = content, .email = "foo@gmail.com" });
-    defer post.deinit(t.allocator);
-
-    try t.expectEqualStrings(content, post.content);
+fn completed(job: *app.Job) void {
+    const event: *zio.Event = @ptrCast(@alignCast(job.context.?));
+    event.set();
 }

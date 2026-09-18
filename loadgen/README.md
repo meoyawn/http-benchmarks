@@ -39,18 +39,34 @@ python3 loadgen/test-servers.py
 python3 loadgen/measure.py results/random-json --rounds 6
 ```
 
-The additional stacks whose historical `/posts` results exceeded 23K RPS use
-four rotating rounds of the same workload. Build the [C# JIT and AOT](../csharp/README.md),
-[Kotlin JVM](../kotlin/README.md), and [Zig](../zig/README.md) artifacts first,
-and set `JAVA_HOME` to the JDK used to build Kotlin:
+The additional C# JIT/AOT, Kotlin JVM and old Zig implementations used a
+four-configuration, four-round sweep. That Zig implementation is superseded.
+To remeasure the remaining three, build [C# JIT and AOT](../csharp/README.md)
+and [Kotlin JVM](../kotlin/README.md), set `JAVA_HOME` to the JDK used to build
+Kotlin, and use six rounds so each occupies every order position twice:
 
 ```sh
-python3 loadgen/test-servers.py --config csharp-jit csharp-aot kotlin-jvm zig
-python3 loadgen/measure.py results/random-json-remaining --rounds 4 --config csharp-jit csharp-aot kotlin-jvm zig
+python3 loadgen/test-servers.py --config csharp-jit csharp-aot kotlin-jvm
+python3 loadgen/measure.py results/random-json-remaining --rounds 6 --config csharp-jit csharp-aot kotlin-jvm
 ```
 
-Use a fresh output directory. Each of six rounds rotates the configuration order
-by one position, so every configuration occupies every order position once.
+The modernized **Zig 0.16.0 / std.http / zio / yyjson / zqlite** stack uses
+one executor (`zig`) and four (`zig-4`), each plus its dedicated writer. Build
+[Zig](../zig/README.md) and measure the two configurations independently of the
+historical sweep:
+
+```sh
+python3 loadgen/test-servers.py --config zig zig-4
+python3 loadgen/measure.py results/zig-final --rounds 4 --config zig zig-4
+```
+
+Four rounds alternate their order twice, with ten seconds per endpoint. Both
+must exit gracefully and remove their own sockets. The report records the Zig
+source hashes as well as the executable, SQLite library and corpus hashes.
+
+Use a fresh output directory. Each round rotates configuration order by one
+position; the default six-configuration sweep uses six rounds so every
+configuration occupies every order position once.
 Each process gets a fresh migrated database, then ten seconds of `/posts` and
 ten seconds of `/echo`, with 50 concurrent requests and no HTTP warm-up. Server
 settings remain fixed across both endpoints: Rust workers 1/3, Go processors
@@ -109,7 +125,8 @@ histogram. No per-request counters, atomics, locks or result channels are shared
 between client processes. Histograms merge after load finishes. The servers
 already keep request state local; OCaml counters and JSON scratch buffers are
 domain-local, and Rust's shared startup counter is outside the request path.
-Each SQLite writer necessarily owns one serialized transaction stream. Transaction semantics are unchanged; [Zig](../zig/README.md) also received its requested toolchain and dependency update.
+Each SQLite writer necessarily owns one serialized transaction stream. Transaction semantics are unchanged. [Zig](../zig/README.md) now uses coroutine
+HTTP executors and its own dedicated SQLite writer with per-request completion.
 
 Short echo calibration on the two fastest configurations selected this client
 layout. These are diagnostic single samples, not the published six-round results:
@@ -163,8 +180,9 @@ Before considering an insert change, `db/explain-inserts.py` inspected the exact
 SQLite **3.53.4** library built for this benchmark. The post insert uses
 `SEARCH users USING COVERING INDEX sqlite_autoindex_users_1 (email=?)`.
 Full plans and bytecode remain in `loadgen/measurements/sqlite-explain.json` (gitignored).
-No SQL change was justified by this inspection; every language's existing insert
-query remains unchanged. Any future rewrite must be measured and applied across
+No query-plan change was justified by this inspection. Zig retains the same
+indexed insert/select structure, using named parameters and an equivalent `IS`
+comparison for the non-null email. Any future rewrite must be measured and applied across
 all implementations while preserving per-request commits and returned values.
 
 ## Published CPU use
@@ -188,4 +206,12 @@ Four-round medians from `results/random-json-remaining-2026-09-18/summary.json`:
 | csharp-jit | 278% | 114% | 300% | 464% |
 | csharp-aot | 257% | 114% | 299% | 459% |
 | kotlin-jvm | 183% | 89% | 380% | 473% |
-| zig | 114% | 74% | 310% | 482% |
+| Zig (superseded http.zig / 0.15.2) | 114% | 74% | 310% | 482% |
+
+Four-round medians for the modernized Zig stack from
+`results/zig-016-final/summary.json`:
+
+| Server configuration | Write server CPU | Write client CPU | Echo server CPU | Echo client CPU |
+| --- | ---: | ---: | ---: | ---: |
+| zig (1 executor) | 123% | 79% | 99% | 441% |
+| zig-4 (4 executors) | 187% | 98% | 329% | 484% |

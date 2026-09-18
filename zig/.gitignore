@@ -3,3 +3,4 @@ zig-out/
 .idea/
 .task/
 .vscode/
+zig-pkg/

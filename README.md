@@ -8,11 +8,12 @@
 ## Results
 
 Apple M1 Pro **10 cores (8 performance + 2 efficiency)**, 16 GiB RAM, macOS 26.4.
-The **ten rows marked †** were remeasured on
+The **eleven rows marked †** were remeasured on
 **2026-09-18** using [randomized valid JSON](loadgen/README.md) and **Vegeta 12.13.0**.
-Rust, Go and OCaml use six rotating rounds; C# JIT/AOT, Kotlin JVM and Zig use
-a separate four-round sweep of the same workload. Each configuration appears
-once in every order position within its sweep, with fresh processes and databases.
+Rust, Go and OCaml use six rotating rounds. C# JIT/AOT and Kotlin JVM retain
+the subsequent four-round sweep; the modernized Zig stack uses its own four-round
+sweep with one and four HTTP executors. Configurations rotate through order
+positions within each sweep, with fresh processes and databases.
 Each runs `/posts` for 10 seconds, then `/echo` for 10 seconds, at **50 concurrent requests**, without HTTP warm-up.
 
 The seeded corpus has **65,536 valid email/content pairs** and **32–256 Unicode
@@ -29,13 +30,13 @@ tests; normal desktop applications remain active. Separate client CPU, calibrati
 reproduction commands and isolation limits are in the [load methodology](loadgen/README.md).
 
 **Unmarked rows retain historical static-payload results and are not directly
-comparable to the randomized rows.** Startup, clean/debug build times and
-artifact sizes retain their prior measurements; this sweep updates HTTP metrics.
+comparable to the randomized rows.** Zig startup, clean/debug build times and artifact size are also remeasured.
+The other stacks retain their prior non-HTTP measurements.
 
 Go, Kotlin, OCaml, Rust and C# use the same precompiled whole-string ASCII email rule:
 `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`, checked against
-[shared examples](testdata/email-validation.json). Content must be nonempty.
-They also use **identical SQLite 3.53.4 source and reported compile options**,
+[shared examples](testdata/email-validation.json). Content must be nonempty. Zig implements the same rule with an ASCII scanner
+and passes those same fixtures. These six language implementations use **identical SQLite 3.53.4 source and reported compile options**,
 `-O3 -DNDEBUG`, disabled memory accounting, a preallocated page pool, and the
 same [connection settings](db/README.md): WAL, `synchronous=NORMAL`, foreign keys,
 10-second busy timeout, 2,000 KiB cache, 1,000-page automatic checkpoint,
@@ -97,12 +98,13 @@ Setup, library comparisons and tradeoffs: [C#](csharp/README.md).
 task post
 ```
 
-Build and reproduction: [randomized load runner](loadgen/README.md). `task benchmark` reruns Rust/Go/OCaml; the load-runner documentation includes the additional C#/Kotlin/Zig sweep.
+Build and reproduction: [randomized load runner](loadgen/README.md). `task benchmark` reruns Rust/Go/OCaml; the load-runner documentation includes C#/Kotlin and the separate Zig sweep.
 
 ## SQLite write throughput
 
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild | Release binary size |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| [Zig std.http/zio (`-workers 1`)](zig/) † | 31.8K | 1.201ms | 15.8 MiB | 123% | 6.09ms | 34.25s | 3.05s | 0.80 MiB |
 | [Go FastHTTP (`GOMAXPROCS=2`)](go/) † | 31.2K | 1.222ms | 24.8 MiB | 139% | 9.26ms | 19.87s | 1.03s | 7.78 MiB |
 | [C# .NET JIT](csharp/) † | 31.0K | 1.210ms | 169.0 MiB | 278% | 166.47ms | 15.83s | 0.707s | 1.81 MiB (bundle) |
 | [Rust Actix (`-workers 1`)](rust/) † | 30.8K | 1.238ms | 11.3 MiB | 130% | 12.68ms | 43.20s | 1.23s | 1.70 MiB |
@@ -111,7 +113,7 @@ Build and reproduction: [randomized load runner](loadgen/README.md). `task bench
 | [Rust Actix (`-workers 3`)](rust/) † | 29.2K | 1.298ms | 12.3 MiB | 141% | 10.67ms | 43.20s | 1.23s | 1.70 MiB |
 | Kotlin Vert.x SQLite Panama (JVM) † | 28.8K | 1.259ms | 176.3 MiB | 183% | 183.04ms | 21.15s | 1.09s | 15.07 MiB (JAR) |
 | [Go FastHTTP (`GOMAXPROCS=4`)](go/) † | 28.6K | 1.372ms | 26.1 MiB | 183% | 8.82ms | 19.87s | 1.03s | 7.78 MiB |
-| [Zig http.zig](zig/) † | 27.4K | 0.485ms | 7.9 MiB | 114% | — | — | — | — |
+| [Zig std.http/zio (`-workers 4`)](zig/) † | 26.8K | 1.493ms | 14.9 MiB | 187% | 5.84ms | 34.25s | 3.05s | 0.80 MiB |
 | [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) † | 23.0K | 1.685ms | 95.4 MiB | 226% | 10.00ms | 1.12s | 0.521s | 4.60 MiB |
 | JS Bun Hono | 21K | 1.9ms | — | — | — | — | — | — |
 | Python Blacksheep | 19K | 2.5ms | — | — | — | — | — | — |
@@ -140,17 +142,30 @@ Rust measures **30.8K writes/sec** with one HTTP worker and
 OCaml measures **29.4K writes/sec / 67.6K echo** with one HTTP domain,
 and **23.0K / 139.2K** with four. Both keep a dedicated writer.
 These six configurations share the randomized workload and measurement sweep.
-C#, Kotlin JVM and Zig use the same workload in the subsequent four-round sweep.
+C# and Kotlin JVM use the same workload in the subsequent four-round sweep.
+Zig uses the same workload in a separate four-round sweep after modernization.
 
 C# measures **31.0K writes/sec (JIT)** and **30.0K (Native AOT)**,
 with **324.8K / 290.8K echo RPS**, respectively. Both keep the same server
 configuration across endpoints. Its startup/build/size figures retain the prior
 measurements; JIT startup predates bundling and excludes bundle extraction.
 
-Zig measures **27.4K writes/sec / 372.4K echo RPS** after updating to the latest
-compiler available through pkgx (**0.15.2**) and compatible dependencies. It uses
-the shared SQLite **3.53.4** engine, one I/O worker and four request threads with
-thread-local buffers. Insert SQL is unchanged. [Build and update details](zig/README.md).
+Zig now uses the installed **0.16.0** compiler, **std.http.Server + zio 0.17.0**,
+**yyjson 0.12.0**, and **zqlite** with the shared SQLite **3.53.4** engine.
+Its architecture follows Rust: coroutine HTTP executors submit to a bounded queue,
+one dedicated thread owns SQLite, and each request resumes immediately after its
+own commit. zio supplies working async `std.Io` networking through macOS kqueue.
+One executor maximizes writes; four maximize echo among the measured settings.
+Both endpoints keep the same executor count within a run. Local comparisons
+covered four HTTP stacks, three JSON codecs, two SQLite wrappers, and executor
+counts. SQLite wrapper throughput was effectively tied; zqlite had the lower
+median. [Selection evidence, full results and reproduction](zig/README.md).
+
+Zig measures **31.8K writes/sec / 230.6K echo RPS** with one executor,
+and **26.8K / 377.8K** with four. One-executor writes ranged **31.6K–31.9K**;
+four-executor echo ranged **366.5K–389.5K**. Startup medians are **6.09 / 5.84ms**,
+respectively. The same **0.80 MiB** release executable serves both configurations;
+clean release builds take **34.25s**, and real debug edits rebuild in **3.05s**.
 
 Both Kotlin rows were fully remeasured after removing Jackson, staging native
 libraries at build time and adding a HotSpot class/linkage/profile cache for the
@@ -173,7 +188,7 @@ are process-start measurements, not guaranteed cold-cache startup.
 [Go script](go/measure-startup.py), [Kotlin startup script](kotlin/measure-startup.py), [OCaml script](ocaml/measure-startup.py),
 [Rust script](rust/measure-startup.py),
 [Kotlin GraalVM startup script](kotlin/measure-startup.py),
-[C# script](csharp/measure.py). Rust also includes HTTP worker setup. C# launches
+[C# script](csharp/measure.py), [Zig script](zig/measure-startup.py). Rust also includes HTTP worker setup. C# launches
 the built apphost directly after resolving the runtime through `pkgx dotnet`;
 pkgx resolution is excluded from startup timing.
 The earlier ~39ms ntex result included an unconditional 25ms framework startup
@@ -185,8 +200,8 @@ include ordinary launch variation.
 change, measured on **2026-09-18**. The [shared runner](measure-debug-build.py)
 renames `NewPost` (OCaml: `Model.new_post`) and updates its consumers across files
 in a disposable source copy. Each of three samples uses a fresh name; the table
-reports their median wall time. C# uses the equivalent
-[C# runner](csharp/measure-build.py) for both deployment modes. A full warm-up build and a no-change control are
+reports their median wall time. C# and Zig use equivalent
+[C#](csharp/measure-build.py) and [Zig](zig/measure-build.py) runners; C# shares its development build between deployment modes. A full warm-up build and a no-change control are
 excluded. Dependencies, compiler caches and Kotlin's daemons remain warm.
 Compiled output hashes verify that each edit caused a rebuild.
 
@@ -206,6 +221,9 @@ Compiled output hashes verify that each edit caused a rebuild.
 - C# (both rows): `pkgx dotnet build -c Debug --no-restore`, renaming the
   public `NewPost` type and consumers across files. The SDK/runtime and native
   SQLite stay cached; the unoptimized application is recompiled. AOT uses this same JIT-based development workflow.
+- Zig: `python3 zig.py build -Doptimize=Debug`, with LLVM, full debug checks
+  and metadata. Three public `NewPost` renames and consumer updates rebuild and
+  relink the executable, with Zig compiler caches and the shared SQLite engine warm.
 
 Timing includes build-command startup/configuration, application compilation and
 linking (or JVM classes/resources). Setup, downloads, source copying/edits, output
@@ -213,7 +231,8 @@ checks, tests and application startup are excluded. Native SQLite stays cached
 with the same optimized [shared configuration](db/sqlite-config.json).
 Raw samples, edit patches and build logs are in
 `results/debug-rebuild-2026-09-18/` (gitignored); the updated Go and Rust samples
-are in `results/actix-go-final-2026-09-18/debug-builds/`.
+are in `results/actix-go-final-2026-09-18/debug-builds/`. Zig samples are in
+`results/zig-016-builds/`.
 After the per-language toolchain/dependency setup, reproduce from the repository
 root with a fresh output directory:
 
@@ -223,7 +242,7 @@ python3 measure-debug-build.py results/debug-build
 
 **Clean release build** reports three-run medians. Go and Rust retain the
 preceding static-payload sweep's build measurements. Both Kotlin modes retain their preceding remeasurement; the remaining languages retain
-their earlier measurements.
+their earlier measurements, except the newly measured Zig stack.
 Definitions differ by language:
 
 - [Go](go/measure-build.py): a fresh `GOCACHE` per clean build compiles the standard
@@ -251,6 +270,10 @@ Definitions differ by language:
   single-file bundling;
   AOT compiles, links and strips native code. The installed SDK/runtime and NuGet
   caches remain warm; downloads are excluded. Each mode has three rotating runs.
+- [Zig](zig/measure-build.py): fresh local and global compiler caches in a
+  disposable source copy; compile shared SQLite C, yyjson C, zio, the Zig standard
+  library and application, link and strip. Three release builds use the installed
+  compiler and warm dependency sources; downloads and toolchain installation are excluded.
 
 Release binary size is the artifact's on-disk size in MiB (2²⁰ bytes), measured on
 2026-09-18. Native executables are stripped: Go uses the normal optimized build
@@ -272,7 +295,6 @@ The GraalVM executable is stripped and ad-hoc signed after compilation.
   for **6.22 MiB combined**.
 - Rust's **1.70 MiB executable requires the same 1.62 MiB shared SQLite library**,
   for **3.32 MiB combined**. Both worker configurations use the same executable.
-
 - C# JIT's **1.81 MiB single-file bundle includes the application and all
   application dependencies, including native SQLite**. The separately installed
   .NET/ASP.NET runtime is excluded, as the JDK is for Kotlin's fat JAR. SQLite
@@ -280,6 +302,9 @@ The GraalVM executable is stripped and ad-hoc signed after compilation.
 - C# AOT's **9.19 MiB stripped executable** includes its runtime and requires
   the **1.62 MiB SQLite library** beside it, for **10.81 MiB combined**.
   Debug symbols are excluded from both C# sizes; JIT's manifests are bundled.
+- Zig's **0.80 MiB executable includes std.http, zio and yyjson**, and requires
+  the same **1.62 MiB shared SQLite library**, for **2.42 MiB combined**.
+  Both executor configurations use the same stripped `ReleaseFast` artifact.
 
 System libraries are excluded. The measured Go, Kotlin and OCaml artifacts passed
 echo, committed-write and database-integrity checks. Exact byte counts, hashes,
@@ -292,7 +317,8 @@ binary sizes have not been measured.
 
 The dependency audit found one HTTP server, JSON implementation and SQLite engine
 in Rust (Actix / serde_json / rusqlite), OCaml (Cohttp / generated ATD codecs using
-Yojson / sqlite3), and C# (Kestrel / System.Text.Json / native SQLite). Their
+Yojson / sqlite3), C# (Kestrel / System.Text.Json / native SQLite), and Zig (std.http / yyjson /
+zqlite with shared SQLite; zio supplies async I/O). Their
 experiment and build-tool dependencies are excluded from release binaries.
 Go's former Hertz build retained four JSON implementations; the replacement links
 only FastHTTP, the standard JSON engine and Tailscale SQLite. Go 1.27's v1 JSON
@@ -320,13 +346,14 @@ task echo
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | [Rust Actix (`-workers 3`)](rust/) † | 397.9K | 0.093ms | 13.5 MiB | 269% | 10.67ms | 43.20s | 1.23s |
-| [Zig http.zig](zig/) † | 372.4K | 0.111ms | 7.9 MiB | 310% | — | — | — |
+| [Zig std.http/zio (`-workers 4`)](zig/) † | 377.8K | 0.104ms | 15.2 MiB | 329% | 5.84ms | 34.25s | 3.05s |
 | Kotlin Vert.x (JVM) † | 365.0K | 0.093ms | 434.7 MiB | 380% | 183.04ms | 21.15s | 1.09s |
 | [C# .NET JIT](csharp/) † | 324.8K | 0.132ms | 172.1 MiB | 300% | 166.47ms | 15.83s | 0.707s |
 | [Kotlin Vert.x (GraalVM)](kotlin/#optimized-graalvm-executable) | 306.2K | 0.131ms | 90.1 MiB | 341% | 29.62ms | 149.49s | 1.09s (JVM) |
 | [Go FastHTTP (`GOMAXPROCS=4`)](go/) † | 300.3K | 0.117ms | 26.4 MiB | 345% | 8.82ms | 19.87s | 1.03s |
 | [C# .NET AOT](csharp/) † | 290.8K | 0.154ms | 106.2 MiB | 299% | 89.28ms | 24.85s | 0.707s (JIT) |
 | [Go FastHTTP (`GOMAXPROCS=2`)](go/) † | 248.9K | 0.171ms | 24.9 MiB | 197% | 9.26ms | 19.87s | 1.03s |
+| [Zig std.http/zio (`-workers 1`)](zig/) † | 230.6K | 0.203ms | 15.9 MiB | 99% | 6.09ms | 34.25s | 3.05s |
 | [Rust Actix (`-workers 1`)](rust/) † | 201.4K | 0.201ms | 12.5 MiB | 99% | 12.68ms | 43.20s | 1.23s |
 | Python Blacksheep | 192K | 0.2ms | — | — | — | — | — |
 | JS Bun Hono | 156K | 0.3ms | — | — | — | — | — |
@@ -341,8 +368,12 @@ the same artifact and server configuration. Each OCaml HTTP domain served reques
 
 The `results/random-json-2026-09-18/summary.json` report (gitignored) contains
 the Rust/Go/OCaml rounds, verification, client CPU, topology and artifact hashes.
-The additional four-stack sweep is in `results/random-json-remaining-2026-09-18/summary.json`
+The earlier additional four-stack sweep is in `results/random-json-remaining-2026-09-18/summary.json`
 (gitignored), with its raw logs, histograms and databases alongside it.
+Modernized Zig's final four-round sweep is in `results/zig-016-final/summary.json`;
+startup samples are in `results/zig-016-start-{1,4}/`, build samples in
+`results/zig-016-builds/`, and exact byte counts/linkage/hashes in
+`results/zig-016-artifact.json` (all gitignored).
 Full raw JSON, histograms, RSS samples, logs and databases remain locally under
 `results/random-json-2026-09-18/` (gitignored). Historical reports remain under
 `results/actix-go-final-2026-09-18/` and `results/ocaml-2026-09-17/`.
