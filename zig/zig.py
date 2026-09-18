@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run pkgx Zig, selecting an installed arm64-compatible macOS SDK if needed."""
+"""Run installed Zig 0.16, selecting an arm64-compatible macOS SDK if needed."""
 import os
 from pathlib import Path
 import platform
@@ -20,7 +20,7 @@ def main():
         if not supports_arm64(sdk):
             candidates = sorted(p for p in Path("/Library/Developer/CommandLineTools/SDKs").glob("MacOSX*.sdk") if supports_arm64(p))
             if not candidates:
-                raise SystemExit("Zig 0.15.2 needs a macOS SDK with arm64-macos linker stubs; install a compatible SDK.")
+                raise SystemExit("Zig needs a macOS SDK with arm64-macos linker stubs; install a compatible SDK.")
             sdk = candidates[-1].resolve()
             directory = Path(__file__).resolve().parent / ".tools/sdk-bin"
             directory.mkdir(parents=True, exist_ok=True)
@@ -32,7 +32,10 @@ def main():
             shim.chmod(0o755)
             env["PATH"] = str(directory) + os.pathsep + env["PATH"]
             print(f"Zig SDK: {sdk}", flush=True)
-    os.execvpe("pkgx", ["pkgx", "zig@0.15.2", *sys.argv[1:]], env)
+    version = subprocess.check_output(["zig", "version"], text=True).strip()
+    if version != "0.16.0":
+        raise SystemExit(f"Expected installed Zig 0.16.0, got {version}")
+    os.execvpe("zig", ["zig", *sys.argv[1:]], env)
 
 
 if __name__ == "__main__":

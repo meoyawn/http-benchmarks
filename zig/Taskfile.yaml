@@ -19,19 +19,34 @@ tasks:
       - build.zig*
       - zig.py
       - ../db/migrations/*.sql
+      - ../db/sqlite-config.json
+      - ../testdata/email-validation.json
     generates:
       - zig-out/bin/zig
 
   start:
     deps:
       - build
-    cmd: zig-out/bin/zig
+    cmd: zig-out/bin/zig {{.CLI_ARGS}}
 
   test:
-    deps: [sqlite]
-    cmd: python3 zig.py build test --summary all
+    deps: [build]
+    cmds:
+      - python3 zig.py build test --summary all
+      - python3 test-http.py
     sources:
       - src/**/*
       - build.zig*
       - zig.py
+      - test-http.py
       - ../db/migrations/*.sql
+      - ../db/sqlite-config.json
+      - ../testdata/email-validation.json
+
+  compare-libraries:
+    deps: [sqlite]
+    cmd: python3 compare.py libs {{.CLI_ARGS | default "../results/zig-libraries"}}
+
+  compare-http:
+    deps: [sqlite]
+    cmd: python3 compare.py http {{.CLI_ARGS | default "../results/zig-http"}}

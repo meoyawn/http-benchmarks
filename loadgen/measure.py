@@ -39,7 +39,7 @@ def aggregate(runs):
 
 
 DEFAULT_CONFIGS = ("rust-1", "go-2", "ocaml-1", "rust-3", "go-4", "ocaml-4")
-CONFIG_NAMES = (*DEFAULT_CONFIGS, "csharp-jit", "csharp-aot", "kotlin-jvm", "zig")
+CONFIG_NAMES = (*DEFAULT_CONFIGS, "csharp-jit", "csharp-aot", "kotlin-jvm", "zig", "zig-4")
 
 
 def configurations(names):
@@ -52,7 +52,8 @@ def configurations(names):
         "ocaml-4": (ROOT / "ocaml/_build/default/bin/bench.exe", ["-domains", "4"], {}),
         "csharp-jit": (ROOT / "csharp/bin/jit/csharp", [], {}),
         "csharp-aot": (ROOT / "csharp/bin/aot/csharp", [], {}),
-        "zig": (ROOT / "zig/zig-out/bin/zig", [], {}),
+        "zig": (ROOT / "zig/zig-out/bin/zig", ["-workers", "1"], {}),
+        "zig-4": (ROOT / "zig/zig-out/bin/zig", ["-workers", "4"], {}),
     }
     if "csharp-jit" in names:
         runtimes = subprocess.check_output(["pkgx", "dotnet", "--list-runtimes"], text=True)
@@ -111,7 +112,7 @@ def main():
     for name in configs:
         if name.startswith("csharp-"):
             tracked += [p for p in configs[name][0].parent.iterdir() if p.is_file() and p.suffix != ".pdb"]
-        elif name == "zig":
+        elif name.startswith("zig"):
             tracked += list((ROOT / "zig/.tools/sqlite/lib").glob("libsqlite3.*"))
         elif name == "kotlin-jvm":
             tracked += [ROOT / "kotlin/build/libs/kotlin-1.0-all.jar", ROOT / "kotlin/build/jit/kotlin-bench.aot"]
@@ -128,6 +129,8 @@ def main():
               "artifacts_sha256": hashes, "configurations": {k: {"binary": artifact_key(b), "args": flags, "env": env} for k, (b, flags, env) in configs.items()},
               "sqlite_configuration": json.loads((ROOT / "db/sqlite-config.json").read_text()),
               "source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sorted(ROOT.glob("loadgen/*")) if p.suffix in (".go", ".py", ".mod", ".sum")},
+              "zig_source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sorted([*(ROOT / "zig/src").glob("*.zig"), *(ROOT / "zig").glob("build.zig*"), ROOT / "zig/zig.py"])}
+                                     if any(name.startswith("zig") for name in configs) else {},
               "runs": runs, "verification": checks, "order": []}
     for index in range(args.rounds):
         shift = index % len(order)
@@ -152,9 +155,9 @@ def main():
                         runs[name][endpoint].append(result)
                 finally:
                     workload.stop(server)
-                    if name == "zig":
-                        socket.unlink(missing_ok=True)
-            accepted_exits = (0, 128 + signal.SIGTERM, -signal.SIGTERM) if name in ("zig", "kotlin-jvm") else (0,)
+                    if name.startswith("zig") and socket.exists():
+                        raise RuntimeError("Zig left its socket behind")
+            accepted_exits = (0, 128 + signal.SIGTERM, -signal.SIGTERM) if name == "kotlin-jvm" else (0,)
             if server.returncode not in accepted_exits:
                 raise RuntimeError(f"{name} failed to stop cleanly: {server.returncode}")
             completed = runs[name].get("posts", [])
