@@ -197,6 +197,23 @@ Tailscale's binding, and native library links. The companion differs only in deb
 symbols; the release uses `-ldflags='-s -w'`. Exact bytes, hashes and build metadata
 are retained in `results/go-stacks-2026-09-18/release-audit.json` locally (gitignored).
 
+## Profiling writes
+
+From the repository root, use fresh output directories:
+
+```sh
+python3 go/profile.py results/go-wall --profiler fgprof --seconds 10
+python3 go/profile.py results/go-cpu --profiler cpu --seconds 10
+```
+
+The runner builds a disposable source copy with fgprof 0.9.5, exercises `/posts`
+at `GOMAXPROCS=2` (override with `--gomaxprocs`), stops cleanly, and verifies the
+database. It saves the pprof recording, `top.txt`, commands and artifact hashes.
+Production sources and module dependencies stay unchanged. fgprof includes
+goroutine waits; its summed wall time is not CPU utilization. Profiled throughput
+is excluded from rankings. The [Rust/Go investigation](../rust/write-profile.md)
+compares these profiles with native Rust stacks and controlled experiments.
+
 ## Historical SQLite selection
 
 These 2026-09-17 direct-API measurements explain retaining Tailscale; the new

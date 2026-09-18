@@ -61,6 +61,8 @@ def main():
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--binary", type=Path, nargs="+", default=[PROJECT / "target/release/rust-benchmark"])
     parser.add_argument("--workers", type=int, nargs="+", default=[1])
+    parser.add_argument("--go-binary", type=Path, help="include a freshly built Go control in the rotating runs")
+    parser.add_argument("--gomaxprocs", type=int, nargs="+", default=[2])
     parser.add_argument("--variant", nargs=3, action="append", metavar=("NAME", "BINARY", "WORKERS"),
                         help="compare named variants with independent worker counts; repeat as needed")
     parser.add_argument("--duration", default="10s")
@@ -73,12 +75,20 @@ def main():
                      for binary in args.binary for workers in args.workers})
     except ValueError:
         parser.error("worker counts must be integers")
+    if args.variant and len(variants) != len(args.variant):
+        parser.error("variant names must be unique")
+    go_names = set()
+    if args.go_binary:
+        for processors in args.gomaxprocs:
+            name = f"go-{processors}"
+            if name in variants:
+                parser.error(f"duplicate variant: {name}")
+            variants[name] = (args.go_binary.resolve(), processors)
+            go_names.add(name)
     if args.rounds < 1 or any(workers < 1 or not binary.is_file() for binary, workers in variants.values()):
         parser.error("positive rounds/workers and already built binaries required")
     if any(not re.fullmatch(r"[A-Za-z0-9_.-]+", name) or name in (".", "..") for name in variants):
         parser.error("variant names must be single safe directory names")
-    if args.variant and len(variants) != len(args.variant):
-        parser.error("variant names must be unique")
     hashes = {name: digest(binary) for name, (binary, _) in variants.items()}
     sqlite_library = PROJECT / ".tools/sqlite/lib" / ("libsqlite3.dylib" if platform.system() == "Darwin" else "libsqlite3.so")
     library_hash = digest(sqlite_library)
@@ -99,11 +109,18 @@ def main():
             socket = Path(f"/tmp/rust-bench-{os.getpid()}.sock")
             if os.path.lexists(socket):
                 raise RuntimeError(f"socket already exists: {socket}")
-            command = [str(binary), "-db", str(database), "-socket", str(socket), "-workers", str(workers)]
+            command = [str(binary), "-db", str(database), "-socket", str(socket)]
+            env = dict(os.environ)
+            if name in go_names:
+                env["GOMAXPROCS"] = str(workers)
+            else:
+                command.extend(["-workers", str(workers)])
             (directory / "command.json").write_text(json.dumps(command, indent=2) + "\n")
+            (directory / "configuration.json").write_text(json.dumps(
+                {"GOMAXPROCS": workers} if name in go_names else {"http_workers": workers}, indent=2) + "\n")
             print(f"{name} round {index + 1}", flush=True)
             with (directory / "server.log").open("w") as log:
-                server = subprocess.Popen(command, cwd=PROJECT, stdout=log, stderr=subprocess.STDOUT)
+                server = subprocess.Popen(command, cwd=PROJECT, env=env, stdout=log, stderr=subprocess.STDOUT)
                 try:
                     workload.wait_ready(server, socket)
                     for endpoint in workload.PAYLOADS:
@@ -136,6 +153,8 @@ def main():
     } for endpoint, runs in endpoints.items()} for name, endpoints in results.items()}
     record = {"method": "Rotating-order rounds, fresh processes/databases, 50 connections, posts then echo, no HTTP warm-up; medians except maximum sampled RSS; 100% CPU = one core",
               "platform": platform.platform(), "rounds": args.rounds, "duration": args.duration,
+              "configurations": {name: ({"GOMAXPROCS": workers} if name in go_names else {"http_workers": workers})
+                                 for name, (_, workers) in variants.items()},
               "artifacts_sha256": hashes, "sqlite_library_sha256": library_hash,
               "executable_bytes": {name: binary.stat().st_size for name, (binary, _) in variants.items()},
               "sqlite_library_bytes": sqlite_library.stat().st_size,
@@ -147,6 +166,9 @@ def main():
               "source_sha256": {str(path.relative_to(ROOT)): digest(path) for path in sorted(list((PROJECT / "src").rglob("*.rs")) + [PROJECT / "Cargo.toml", PROJECT / "Cargo.lock", PROJECT / "build.rs", PROJECT / ".cargo/config.toml"])},
               "oha_version": subprocess.check_output(shlex.split(args.oha) + ["--version"], text=True).strip(),
               "runs": results, "verification": checks, "summary": summary}
+    if args.go_binary:
+        record["go_build_info"] = subprocess.check_output(
+            ["go", "version", "-m", str(args.go_binary.resolve())], text=True)
     (output / "summary.json").write_text(json.dumps(record, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
 

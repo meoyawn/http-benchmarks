@@ -23,6 +23,11 @@ three workers produced the most echo throughput in the worker sweep.
 
 The default's write runs ranged from **48.2K–48.5K writes/sec**. The 50K write target was not reached in these runs. The three-worker echo runs ranged from 370.2K to 408.9K RPS.
 
+The follow-up [write-path investigation](write-profile.md) compares Rust against
+a fresh Go control, profiles both writers, and tests Axum, direct Hyper, Smol,
+blocking HTTP, shared scheduling and wake-up changes. It includes reproducible
+`sample`, Instruments and fgprof commands. No replacement was selected.
+
 The stripped release executable is **1.70 MiB (1,784,224 bytes)**; the shared SQLite library adds **1.62 MiB**, for 3.32 MiB combined. Median build times are **44.47s clean release** and **1.25s warm incremental debug rebuild**. Both worker configurations share these build timings.
 
 The previous ntex startup measurement around 39 ms had a concrete cause:

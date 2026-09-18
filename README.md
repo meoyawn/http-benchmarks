@@ -129,6 +129,12 @@ Rust measures **48.5K writes/sec** with one HTTP worker and
 from 48.2K–48.5K; the 50K write target was not reached in these runs.
 The historical Rust 51K / 266K entries are replaced by these measurements.
 
+A follow-up [Rust/Go write-path investigation](rust/write-profile.md) used
+fgprof, macOS `sample`, Instruments, isolated database controls and additional
+HTTP/runtime comparisons. Rust's database control was faster; notifying its HTTP
+executor after each commit cost more in the instrumented runs. None of the tested
+alternatives reliably beat Go, so the implementation and ranking are retained.
+
 C# measures **48.4K writes/sec (JIT)** and **48.2K (Native AOT)**,
 with **368.8K / 349.2K echo RPS** using the same configuration for both endpoints.
 The HTTP/JSON setup correction replaces the earlier 146.2K / 136.3K echo results:
