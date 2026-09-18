@@ -2,7 +2,11 @@ version: 3
 
 vars:
   JAR: build/libs/kotlin-1.0-all.jar
+  JIT_NATIVE: '{{.TASKFILE_DIR}}/build/jit/native'
+  JIT_CACHE: build/jit/kotlin-bench.aot
+  SQLITE_LIBRARY: '{{if eq OS "darwin"}}libsqlite3.dylib{{else}}libsqlite3.so{{end}}'
   NATIVE: build/native/nativeCompile/kotlin-bench
+  NATIVE_LIBS: '{{.TASKFILE_DIR}}/build/native/nativeCompile/native'
   UNIX_SOCKET: /tmp/benchmark.sock
   JAVA: '{{if .JAVA_HOME}}{{.JAVA_HOME}}/bin/java{{else}}java{{end}}'
 
@@ -15,7 +19,7 @@ tasks:
 
   build:
     run: once
-    cmd: ./gradlew shadowJar
+    cmd: ./gradlew buildJit
 
   build-native:
     run: once
@@ -24,12 +28,17 @@ tasks:
   start-native:
     deps:
       - build-native
-    cmd: '{{.NATIVE}} -Dhttp.socket={{.UNIX_SOCKET}}'
+    cmd: >
+      {{.NATIVE}} "-Djava.library.path={{.NATIVE_LIBS}}"
+      "-Dsqlite.library={{.NATIVE_LIBS}}/{{.SQLITE_LIBRARY}}" -Dhttp.socket={{.UNIX_SOCKET}}
 
   test-native:
     deps:
       - build-native
-    cmd: python3 verify-executable.py --native {{.NATIVE}}
+    cmd: >
+      python3 verify-executable.py --native {{.NATIVE}}
+      "--runtime-arg=-Djava.library.path={{.NATIVE_LIBS}}"
+      "--runtime-arg=-Dsqlite.library={{.NATIVE_LIBS}}/{{.SQLITE_LIBRARY}}"
 
   test:
     cmd: ./gradlew test
@@ -39,5 +48,7 @@ tasks:
       - build
     cmd: >
       "{{.JAVA}}" -server -XX:+PerfDisableSharedMem --enable-native-access=ALL-UNNAMED
+      "-Djava.library.path={{.JIT_NATIVE}}" "-Dsqlite.library={{.JIT_NATIVE}}/{{.SQLITE_LIBRARY}}"
+      -XX:AOTMode=on "-XX:AOTCache={{.JIT_CACHE}}"
       -Dhttp.socket={{.UNIX_SOCKET}}
       -jar {{.JAR}}

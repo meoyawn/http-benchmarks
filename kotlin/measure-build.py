@@ -27,10 +27,13 @@ def main():
     with tempfile.TemporaryDirectory(prefix="kotlin-build-") as temporary:
         project = Path(temporary) / "kotlin"
         project.mkdir()
-        shutil.copytree(original_project.parent / "db", project.parent / "db")
+        shutil.copytree(original_project.parent / "db", project.parent / "db",
+                        ignore=shutil.ignore_patterns("*.sqlite*", ".tools"))
+        shutil.copytree(original_project.parent / "testdata", project.parent / "testdata")
         for name in ("src", "gradle"):
             shutil.copytree(original_project / name, project / name)
-        for name in ("build.gradle", "settings.gradle", "gradle.properties", "gradlew", "prepare-sqlite.py"):
+        for name in ("build.gradle", "settings.gradle", "gradle.properties", "gradlew", "prepare-sqlite.py",
+                     "verify-executable.py", "measure-http.py"):
             shutil.copy2(original_project / name, project / name)
         cache = ".tools/sqlite-amalgamation-3530400"
         shutil.copytree(original_project / cache, project / cache)
@@ -44,7 +47,7 @@ def measure(project, output, native=False):
     marker = b'logger.log(System.Logger.Level.INFO, "Listening on $uds")'
     assert original.count(marker) == 1, "Cannot locate startup log to change"
     command = ["./gradlew", "--offline", "--no-build-cache", "--console=plain"]
-    task = "nativeCompile" if native else "shadowJar"
+    task = "nativeCompile" if native else "buildJit"
     if native:
         command.append("-PjavaVersion=25")
 
@@ -81,8 +84,9 @@ def measure(project, output, native=False):
         "clean_median": statistics.median(clean),
         "incremental_median": statistics.median(incremental) if incremental else None,
         "includes": "Gradle startup/configuration, SQLite C, jextract, Kotlin/Java compilation, " +
-                    ("GraalVM -O3 native compilation/linking, stripping and macOS signing" if native else "fat JAR packaging"),
-        "excludes": "Dependency downloads, tests and source copying; Gradle/Kotlin daemons are warm; build cache is disabled",
+                    ("GraalVM -O3 native compilation/linking, stripping and macOS signing, native staging" if native else
+                     "fat JAR packaging, native staging and verified HotSpot cache training/assembly"),
+        "excludes": "Dependency downloads, unit tests and source copying; Gradle/Kotlin daemons are warm; build cache is disabled",
         "source_edit": "None; native clean builds replace build/ with the last measured artifact" if native else
                        "Change the startup log string in App.kt in a disposable source copy; original source and runnable artifact are untouched",
     }

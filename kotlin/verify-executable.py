@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--native", type=Path)
     parser.add_argument("--java", default=str(Path(os.environ.get("JAVA_HOME", "/usr")) / "bin/java"))
     parser.add_argument("--jar", type=Path, default=PROJECT / "build/libs/kotlin-1.0-all.jar")
-    parser.add_argument("--jvm-arg", action="append", default=[])
+    parser.add_argument("--jvm-arg", "--runtime-arg", action="append", default=[])
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="kotlin-verify-") as temporary:
         database = Path(temporary) / "bench.sqlite"
@@ -34,7 +34,7 @@ def main():
         with sqlite3.connect(database) as db:
             db.executescript((PROJECT.parent / "db/migrations/001_init.up.sql").read_text())
         properties = [f"-Ddb.path={database}", f"-Dhttp.socket={uds}"]
-        command = ([str(args.native.resolve()), *properties] if args.native else
+        command = ([str(args.native.resolve()), *args.jvm_arg, *properties] if args.native else
                    [args.java, "--enable-native-access=ALL-UNNAMED", *args.jvm_arg,
                     *properties, "-jar", str(args.jar.resolve())])
 
