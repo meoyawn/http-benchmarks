@@ -53,14 +53,25 @@ fn openPragmas(conn: *sqlite.Db) !void {
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = std.heap.smp_allocator;
 
-    const allocator = gpa.allocator();
-
-    const socket = "/tmp/benchmark.sock";
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+    var socket: []const u8 = "/tmp/benchmark.sock";
+    var database: [:0]const u8 = "../db/db.sqlite";
+    var index: usize = 1;
+    while (index < args.len) : (index += 2) {
+        if (index + 1 >= args.len) return error.MissingArgument;
+        if (std.mem.eql(u8, args[index], "-db")) {
+            database = args[index + 1];
+        } else if (std.mem.eql(u8, args[index], "-socket")) {
+            socket = args[index + 1];
+        } else return error.UnknownArgument;
+    }
+    if (sqlite.c.sqlite3_initialize() != sqlite.c.SQLITE_OK) return error.SqliteInitialization;
 
     var db = try sqlite.Db.init(.{
-        .mode = sqlite.Db.Mode{ .File = "../db/db.sqlite" },
+        .mode = sqlite.Db.Mode{ .File = database },
         .open_flags = .{
             .write = true,
         },
@@ -85,10 +96,12 @@ pub fn main() !void {
         .insertPost = insertPost,
     };
 
-    var server = try httpz.ServerApp(*App).init(
+    var server = try httpz.Server(*App).init(
         allocator,
         .{
-            .unix_path = socket,
+            .address = .{ .unix = socket },
+            .workers = .{ .count = 1 },
+            .thread_pool = .{ .count = 4, .buffer_size = 16384 },
         },
         &app,
     );
@@ -96,9 +109,9 @@ pub fn main() !void {
         server.stop();
         server.deinit();
     }
-    var router = server.router();
-    router.post("/posts", httpPost);
-    router.post("/echo", httpEcho);
+    var router = try server.router(.{});
+    router.post("/posts", httpPost, .{});
+    router.post("/echo", httpEcho, .{});
 
     std.debug.print("Listening on {s}\n", .{socket});
     try server.listen();
@@ -115,8 +128,8 @@ fn isValidEmail(email: String) bool {
     return VALID_EMAIL.isMatch(email);
 }
 
-fn validate(alloc: Allocator, np: NewPost) !std.ArrayList(String) {
-    var errs = try std.ArrayList(String).initCapacity(alloc, 2);
+fn validate(alloc: Allocator, np: NewPost) !std.array_list.Managed(String) {
+    var errs = try std.array_list.Managed(String).initCapacity(alloc, 2);
 
     if (np.content.len == 0) {
         try errs.append("content: should not be empty");
@@ -130,7 +143,7 @@ fn validate(alloc: Allocator, np: NewPost) !std.ArrayList(String) {
     return errs;
 }
 
-fn deinitList(arr: std.ArrayList(String)) void {
+fn deinitList(arr: std.array_list.Managed(String)) void {
     for (arr.items) |value| {
         arr.allocator.free(value);
     }
@@ -220,8 +233,9 @@ test "valid post" {
 test "transaction" {
     const t = std.testing;
 
+    if (sqlite.c.sqlite3_initialize() != sqlite.c.SQLITE_OK) return error.SqliteInitialization;
     var db = try sqlite.Db.init(.{
-        .mode = .{ .File = "../db/db.sqlite" },
+        .mode = .Memory,
         .open_flags = .{
             .write = true,
         },
@@ -231,6 +245,11 @@ test "transaction" {
         db.deinit();
     }
 
+    var statements = std.mem.splitScalar(u8, @embedFile("schema"), ';');
+    while (statements.next()) |statement| {
+        const sql = std.mem.trim(u8, statement, " \r\n\t");
+        if (sql.len != 0) try db.execDynamic(sql, .{}, .{});
+    }
     try openPragmas(&db);
 
     var insertUser = try db.prepare(INSERT_USER);

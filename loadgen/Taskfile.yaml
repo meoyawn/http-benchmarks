@@ -1,0 +1,12 @@
+version: 3
+
+tasks:
+  build:
+    run: once
+    cmd: go build -trimpath -o bombard .
+    sources: [main.go, go.mod, go.sum]
+    generates: [bombard]
+
+  test:
+    deps: [build]
+    cmd: python3 test.py

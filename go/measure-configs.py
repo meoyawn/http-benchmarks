@@ -70,7 +70,7 @@ def main():
                     workload.wait_ready(server, sock)
                     for endpoint in workload.PAYLOADS:
                         result = workload.measure(server, endpoint, sock, directory / endpoint,
-                                                  ["pkgx", "oha"], args.duration)
+                                                  [str(ROOT / "loadgen/bombard")], args.duration)
                         result["cpu_method"] = "Whole-process ps CPU-time delta / wall time around the load, across every server thread; 100% = one core"
                         (directory / endpoint).with_suffix(".metrics.json").write_text(json.dumps(result, indent=2) + "\n")
                         result.pop("rss_samples")

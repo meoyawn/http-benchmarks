@@ -53,7 +53,7 @@ def main():
                 try:
                     workload.wait_ready(server, socket)
                     for endpoint in workload.PAYLOADS:
-                        row = workload.measure(server, endpoint, socket, directory / endpoint, ["pkgx", "oha"], args.duration)
+                        row = workload.measure(server, endpoint, socket, directory / endpoint, [str(ROOT / "loadgen/bombard")], args.duration)
                         row.pop("rss_samples")
                         results[domains][endpoint].append(row)
                 finally:

@@ -1,5 +1,8 @@
 version: 3
 
+includes:
+  load: {taskfile: ../loadgen/Taskfile.yaml, dir: ../loadgen}
+
 tasks:
   setup:
     cmd: ./setup.sh
@@ -17,7 +20,7 @@ tasks:
     cmd: python3 test.py
 
   benchmark:
-    deps: [build]
+    deps: [build, load:build]
     cmd: python3 measure-http.py {{.CLI_ARGS | default "../results/ocaml-http"}}
 
   measure-startup:

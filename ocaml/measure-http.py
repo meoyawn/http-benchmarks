@@ -26,20 +26,7 @@ def module_from(path, name):
     return module
 
 
-def verify(database, completed):
-    with sqlite3.connect(database) as db:
-        integrity = db.execute("PRAGMA integrity_check").fetchall()
-        foreign_keys = db.execute("PRAGMA foreign_key_check").fetchall()
-        posts = db.execute("SELECT count(*) FROM posts").fetchone()[0]
-        users = db.execute("SELECT count(*) FROM users").fetchone()[0]
-        invalid = db.execute("SELECT count(*) FROM posts WHERE content IS NOT 'oha benchmark' OR user_id IS NOT 1").fetchone()[0]
-        sequence = db.execute("SELECT seq FROM sqlite_sequence WHERE name='users'").fetchone()[0]
-    if integrity != [("ok",)] or foreign_keys or invalid or users != 1:
-        raise RuntimeError("database integrity/content check failed")
-    if not completed <= posts <= completed + 50 or sequence != posts:
-        raise RuntimeError(f"commit/sequence mismatch: {completed=}, {posts=}, {sequence=}")
-    return {"integrity": integrity, "foreign_keys": foreign_keys, "posts": posts,
-            "users": users, "user_sequence": sequence, "completed_post_responses": completed}
+verify = workload.verify
 
 
 def main():
@@ -47,7 +34,7 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--binary", type=Path, default=PROJECT / "_build/default/bin/bench.exe")
-    parser.add_argument("--oha", default="pkgx oha")
+    parser.add_argument("--loadgen", default=str(Path(__file__).resolve().parent.parent / "loadgen/bombard"))
     parser.add_argument("--domains", type=int, default=1)
     args = parser.parse_args()
     if args.rounds < 1 or not args.binary.is_file():
@@ -72,7 +59,7 @@ def main():
             try:
                 workload.wait_ready(server, socket_path)
                 for endpoint in workload.PAYLOADS:
-                    result = workload.measure(server, endpoint, socket_path, directory / endpoint, shlex.split(args.oha))
+                    result = workload.measure(server, endpoint, socket_path, directory / endpoint, shlex.split(args.loadgen))
                     results[endpoint].append(result)
             finally:
                 workload.stop(server)
@@ -91,7 +78,7 @@ def main():
         "binary_sha256": hashlib.sha256(args.binary.read_bytes()).hexdigest(),
         "http_domains": args.domains,
         "writer_domains": 1,
-        "oha_version": subprocess.check_output(shlex.split(args.oha) + ["--version"], text=True).strip(),
+        "load_generator": subprocess.check_output(shlex.split(args.loadgen) + ["--version"], text=True).strip(),
         "verification": checks,
         "runs": {endpoint: [{k: v for k, v in run.items() if k != "rss_samples"} for run in runs]
                  for endpoint, runs in results.items()},

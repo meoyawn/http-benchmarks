@@ -15,27 +15,23 @@ Two measured deployment modes use the same application and SQLite implementation
 
 ## Measured results
 
-On the root README's M1 Pro, 2026-09-18. Each mode has three fresh processes
+On the root README's M1 Pro, 2026-09-18. Each mode has four fresh processes
 and databases, 50 connections, 10 seconds of writes then 10 seconds of echo,
-and no HTTP warm-up. The order rotates; medians are reported except maximum
+and no HTTP warm-up, using the shared [randomized JSON workload](../loadgen/README.md).
+The order rotates with Kotlin JVM and Zig; medians are reported except maximum
 sampled RSS. Other desktop applications remained running. Both endpoints use
 the same two pool workers and three socket I/O threads in each process.
 
 | Mode | Write RPS | Write p50 | Write RSS | Write CPU | Echo RPS | Echo p50 | Echo RSS | Echo CPU | Startup |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| JIT | 48.4K | 0.908ms | 168.7 MiB | 320% | 368.8K | 0.116ms | 170.0 MiB | 258% | 166.47ms |
-| AOT | 48.2K | 0.906ms | 105.3 MiB | 307% | 349.2K | 0.126ms | 105.9 MiB | 267% | 89.28ms |
+| JIT | 31.0K | 1.210ms | 169.0 MiB | 278% | 324.8K | 0.132ms | 172.1 MiB | 300% | 166.47ms |
+| AOT | 30.0K | 1.232ms | 105.6 MiB | 257% | 290.8K | 0.154ms | 106.2 MiB | 299% | 89.28ms |
 
-Write ranges were 44.1K–48.8K (JIT) and 47.6K–48.7K (AOT); echo ranges were
-362.2K–382.0K and 340.6K–350.8K. All three runs, including the slower JIT write
-sample, remain in the medians. The variation prevents a confident ordering of
-write throughput. The old 45K/190K row is historical, with a different runtime,
-validation and measurement protocol.
-
-These performance and startup figures retain the preceding measurements. Only
-release size was updated for the bundle. Subsequent timing and throughput
-measurements overlapped background video playback and are excluded. Retained
-JIT startup and build timings predate bundling and exclude extraction/bundling.
+Every randomized response had the expected status; all completed writes matched
+committed rows exactly. Raw samples and checks are in
+`results/random-json-remaining-2026-09-18/` (gitignored).
+Startup/build/size figures retain the prior measurements. JIT startup and build
+timings predate bundling and exclude extraction/bundling.
 
 | Mode | Clean release publish | Warm debug rebuild | Release artifact | With SQLite |
 | --- | ---: | ---: | ---: | ---: |
@@ -306,8 +302,10 @@ python3 csharp/measure-build.py results/csharp-build --mode jit aot
 The mode runner resolves the runtime using `pkgx dotnet`, then launches built
 apphosts directly; pkgx resolution is outside startup timing. It checks artifact
 hashes, expected statuses, database integrity, foreign keys, content, timestamps,
-user counts and both AUTOINCREMENT sequences. Up to 50 committed writes can lack
-received responses when oha cancels at its deadline. RSS and CPU use the shared
+user counts and both AUTOINCREMENT sequences. The runner now uses the shared
+[randomized workload](../loadgen/README.md), drains in-flight requests, and requires
+exact response/commit counts. The current HTTP numbers use four randomized rounds; historical selection
+experiments below retain their original static workload. RSS and CPU use the shared
 measurement helpers; CPU 100% is one core, and echo retains write allocations.
 
 Startup ends at the post-bind listening log and includes runtime/native-library

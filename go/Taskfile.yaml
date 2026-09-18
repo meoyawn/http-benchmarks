@@ -1,5 +1,8 @@
 version: 3
 
+includes:
+  load: {taskfile: ../loadgen/Taskfile.yaml, dir: ../loadgen}
+
 tasks:
   build:
     run: once
@@ -18,7 +21,7 @@ tasks:
     cmd: python3 measure-build.py {{.CLI_ARGS | default "../results/go-build"}}
 
   benchmark:
-    deps: [build]
+    deps: [build, load:build]
     cmd: python3 measure-configs.py {{.CLI_ARGS | default "../results/go-http"}} --binary bench --gomaxprocs 2 4
 
   measure-startup:

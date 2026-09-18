@@ -40,7 +40,7 @@ Measured on 2026-09-17, Apple M1 Pro, 16 GiB RAM, macOS 26.4.
 | [Gradle](https://gradle.org/releases/) / [Shadow](https://plugins.gradle.org/plugin/com.gradleup.shadow) | 9.7.1 / 9.6.1 |
 | Dependency updates plugin | 0.64.0 |
 | JUnit / AssertJ | 6.1.3 / 3.27.7 |
-| oha, through pkgx | 1.16.0 |
+| Current randomized load driver | [Vegeta 12.13.0](../loadgen/README.md) |
 
 jextract's bundled Java 25 runs the generator only. Compilation, tests and the
 server use Java 26 and its stable Foreign Function & Memory API; no preview flags.
@@ -259,34 +259,27 @@ the round trip. Failed writes reset statements and roll back before the next job
 
 ## HTTP throughput and RAM
 
-The [root tables](../README.md) now use three alternating fresh-process runs for
-JVM and GraalVM on **2026-09-18**: 10 seconds per endpoint, 50 connections,
-`/posts` then `/echo`, no HTTP warm-up. The JVM uses the staged libraries and
-HotSpot cache; GraalVM uses its staged libraries. Both endpoints keep four HTTP
-event loops and one writer.
+The JVM row uses four rotating rounds with C# JIT/AOT and Zig on **2026-09-18**,
+with [randomized valid JSON](../loadgen/README.md): 10 seconds per endpoint,
+50 connections, `/posts` then `/echo`, no HTTP warm-up, fresh processes and databases.
+The JVM retains staged libraries, the HotSpot cache, four HTTP event loops and one writer.
+GraalVM retains its earlier three-run static-payload measurements and is not directly comparable.
 
 | Runtime | Writes RPS | Echo RPS | Write / echo p50 | Write / echo peak RSS | Write / echo CPU |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| JVM | 45.3K | 373.0K | 0.992 / 0.096ms | 170.7 / 490.3 MiB | 191% / 277% |
+| JVM | 28.8K | 365.0K | 1.259 / 0.093ms | 176.3 / 434.7 MiB | 183% / 380% |
 | GraalVM | 8.9K | 306.2K | 5.109 / 0.131ms | 104.6 / 90.1 MiB | 116% / 341% |
 
-RPS, p50 and CPU are medians; RSS is the maximum sample across all three runs.
-RSS includes native memory and excludes oha, sampled approximately every 100 ms.
-Echo retains allocations from writes. JVM writes ranged from **40.3K–45.4K** and
-echo from **362.2K–378.2K**; the first echo run reached 490.3 MiB RSS, while the
-other two peaked at 319.0 and 310.3 MiB. That maximum is retained in the tables.
-CPU 100% means one core.
+RPS, p50 and CPU are medians; RSS is the maximum sample, including native memory
+and excluding the load generator. Echo retains allocations from writes.
+CPU 100% means one core. Every randomized response had the expected status;
+completed writes matched committed rows exactly and passed integrity, foreign-key
+and corpus-content checks. Raw samples are in
+`results/random-json-remaining-2026-09-18/` (gitignored).
 
-Use `measure-runtimes.py` and the complete reproduction sequence above for the
-published configuration. `measure-http.py` also supports individual experiments
-with `--oha oha`, `--socket /tmp/another.sock`, `--native`, and repeatable
-`--jvm-arg=-Dname=value` overrides. Its default is `pkgx oha`.
-
-All completed requests returned the expected status. oha cancels in-flight
-requests at the deadline, so up to 50 extra posts per write run may commit without
-a received HTTP 201. Each database passed row-count, stored-content, user-ID
-sequence, integrity and foreign-key checks after shutdown. Raw samples and the
-complete report are in `results/kotlin-complete-2026-09-18/runtimes/` (gitignored).
+`measure-http.py` supports `--loadgen COMMAND`, `--socket /tmp/another.sock`,
+`--native`, and repeatable `--jvm-arg=-Dname=value` overrides.
+The default load generator is the shared Vegeta driver.
 
 ## Binary startup
 

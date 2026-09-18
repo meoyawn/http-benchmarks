@@ -65,7 +65,7 @@ def main():
                 try:
                     workload.wait_ready(server, socket)
                     for endpoint in workload.PAYLOADS:
-                        result = workload.measure(server, endpoint, socket, directory / endpoint, ["pkgx", "oha"])
+                        result = workload.measure(server, endpoint, socket, directory / endpoint, [str(ROOT / "loadgen/bombard")])
                         result.pop("rss_samples")
                         results[name][endpoint].append(result)
                 finally:
@@ -98,7 +98,7 @@ def main():
     record = {"method": "Three rotating-order rounds by default; fresh processes and migrated databases; 50 connections for 10s per endpoint; posts then echo, no warm-up; identical simple email regex; median RPS/p50/CPU and maximum sampled RSS",
               "rounds": args.rounds, "ocaml_http_domains": args.ocaml_domains,
               "artifacts_sha256": hashes, "ocaml_native_sqlite_sha256": sqlite_hash,
-              "sqlite_configuration": json.loads((ROOT / "db/sqlite-config.json").read_text()), "oha_version": subprocess.check_output(["pkgx", "oha", "--version"], text=True).strip(),
+              "sqlite_configuration": json.loads((ROOT / "db/sqlite-config.json").read_text()), "load_generator": subprocess.check_output([str(ROOT / "loadgen/bombard"), "-version"], text=True).strip(),
               "runs": results, "verification": verification, "summary": summary}
     (output / "summary.json").write_text(json.dumps(record, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
