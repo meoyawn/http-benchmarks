@@ -1,3 +1,5 @@
 .idea/
 bench
+bench-symbols
+bench-debug
 __pycache__/

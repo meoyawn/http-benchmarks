@@ -3,18 +3,24 @@ version: 3
 tasks:
   build:
     run: once
-    cmd: env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -o bench .
+    cmd: env CGO_CFLAGS='-O3 -DNDEBUG' go build -trimpath -ldflags='-s -w' -o bench .
 
   start:
     deps: [build]
     cmd: ./bench {{.CLI_ARGS}}
 
   test:
-    cmd: go test -race ./...
+    cmds:
+      - env CGO_CFLAGS='-O3 -DNDEBUG' GOMAXPROCS=2 go test -race -count=1 ./...
+      - env CGO_CFLAGS='-O3 -DNDEBUG' GOMAXPROCS=4 go test -race -count=1 ./...
 
   measure-build:
     cmd: python3 measure-build.py {{.CLI_ARGS | default "../results/go-build"}}
 
   benchmark:
     deps: [build]
-    cmd: python3 measure-http.py {{.CLI_ARGS | default "../results/go-http"}}
+    cmd: python3 measure-configs.py {{.CLI_ARGS | default "../results/go-http"}} --binary bench --gomaxprocs 2 4
+
+  measure-startup:
+    deps: [build]
+    cmd: python3 measure-startup.py {{.CLI_ARGS | default "../results/go-startup"}}

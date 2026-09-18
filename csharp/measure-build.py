@@ -31,7 +31,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='csharp-build-') as temporary:
         root = Path(temporary)
         source = root / 'csharp'
-        shutil.copytree(PROJECT, source, ignore=shutil.ignore_patterns('bin', 'obj', '.tools', '.task', 'experiments', '__pycache__'))
+        shutil.copytree(PROJECT, source, ignore=shutil.ignore_patterns('bin', 'obj', '.tools', '.task', '__pycache__'))
         shutil.copytree(ROOT / 'db', root / 'db', ignore=shutil.ignore_patterns('*.sqlite*', '.tools', '__pycache__'))
         (source / '.tools').mkdir()
         config = json.loads((ROOT / 'db/sqlite-config.json').read_text())

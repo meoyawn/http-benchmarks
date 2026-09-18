@@ -22,7 +22,7 @@ def main():
     # Resolve dependencies once outside the timed interval.
     subprocess.run(["go", "mod", "download"], cwd=project, check=True)
     env = dict(os.environ, GOPROXY="off", GOSUMDB="off", GOTOOLCHAIN="local", CGO_CFLAGS="-O3 -DNDEBUG")
-    command = ["go", "build", "-trimpath", "-o", "bench", "."]
+    command = ["go", "build", "-trimpath", "-ldflags=-s -w", "-o", "bench", "."]
 
     def build(label, directory, cache):
         with (output / f"{label}.log").open("w") as log:
