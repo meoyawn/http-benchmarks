@@ -51,7 +51,7 @@ def main():
     parser.add_argument("--profiler", choices=("fgprof", "cpu"), default="fgprof")
     parser.add_argument("--gomaxprocs", type=int, default=2)
     parser.add_argument("--seconds", type=int, default=10)
-    parser.add_argument("--oha", default="pkgx oha")
+    parser.add_argument("--loadgen", default=str(Path(__file__).resolve().parent.parent / "loadgen/bombard"))
     args = parser.parse_args()
     if args.gomaxprocs < 1 or args.seconds < 1:
         parser.error("positive gomaxprocs and seconds required")
@@ -95,7 +95,7 @@ def main():
         try:
             benchmark.workload.wait_ready(server, socket)
             result = benchmark.workload.measure(server, "posts", socket, output / "posts",
-                                                shlex.split(args.oha), f"{args.seconds}s")
+                                                shlex.split(args.loadgen), f"{args.seconds}s")
         finally:
             benchmark.workload.stop(server)
     if server.returncode:

@@ -1,89 +1,55 @@
 const std = @import("std");
 
-// Although this function looks imperative, note that its job is to
-// declaratively construct a build graph that will be executed by an external
-// runner.
 pub fn build(b: *std.Build) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
     const target = b.standardTargetOptions(.{});
-
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+    const httpz = b.dependency("httpz", .{ .target = target, .optimize = optimize });
+    // This pinned upstream revision applies TCP_NODELAY to Unix sockets.
+    // Patch only the generated build copy; keep the downloaded dependency intact.
+    const source = std.fs.cwd().readFileAlloc(b.allocator, httpz.path("src/httpz.zig").getPath(b), 1024 * 1024) catch @panic("read httpz");
+    if (std.mem.count(u8, source, "const no_delay = config.isUnixAddress();") != 1) @panic("httpz Unix-socket patch no longer matches");
+    const patched = std.mem.replaceOwned(u8, b.allocator, source, "const no_delay = config.isUnixAddress();", "const no_delay = !config.isUnixAddress();") catch @panic("patch httpz");
+    const files = b.addWriteFiles();
+    _ = files.addCopyDirectory(httpz.path("src"), "httpz", .{ .exclude_extensions = &.{"httpz.zig"} });
+    httpz.module("httpz").root_source_file = files.add("httpz/httpz.zig", patched);
+    const mvzr = b.dependency("mvzr", .{ .target = target, .optimize = optimize });
+    const sqlite = b.dependency("sqlite", .{ .target = target, .optimize = optimize });
 
-    const exe = b.addExecutable(.{
-        .name = "zig",
+    // Use the shared SQLite build, not the binding's bundled older engine.
+    const sqlite_module = b.createModule(.{
+        .root_source_file = sqlite.path("sqlite.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    sqlite_module.addIncludePath(sqlite.path("c"));
+    sqlite_module.addIncludePath(b.path(".tools/sqlite/include"));
+    sqlite_module.addCSourceFile(.{ .file = sqlite.path("c/workaround.c"), .flags = &.{} });
+    sqlite_module.addLibraryPath(b.path(".tools/sqlite/lib"));
+    sqlite_module.addRPath(b.path(".tools/sqlite/lib"));
+    sqlite_module.linkSystemLibrary("sqlite3", .{ .use_pkg_config = .no });
+    const options = b.addOptions();
+    options.addOption(bool, "in_memory", true);
+    options.addOption(?[]const u8, "dbfile", null);
+    sqlite_module.addImport("build_options", options.createModule());
+
+    const root = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "httpz", .module = httpz.module("httpz") },
+            .{ .name = "mvzr", .module = mvzr.module("mvzr") },
+            .{ .name = "sqlite", .module = sqlite_module },
+        },
     });
-
-    const httpz = b.dependency("httpz", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("httpz", httpz.module("httpz"));
-
-    const mvzr = b.dependency("mvzr", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("mvzr", mvzr.module("mvzr"));
-
-    const sqlite = b.dependency("sqlite", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("sqlite", sqlite.module("sqlite"));
-
-    // links the bundled sqlite3, so leave this out if you link the system one
-    exe.linkLibrary(sqlite.artifact("sqlite"));
-
-    // This declares intent for the executable to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
+    root.addAnonymousImport("schema", .{ .root_source_file = b.path("../db/migrations/001_init.up.sql") });
+    const exe = b.addExecutable(.{ .name = "zig", .root_module = root });
     b.installArtifact(exe);
+    const run = b.addRunArtifact(exe);
+    if (b.args) |args| run.addArgs(args);
+    b.step("run", "Run the server").dependOn(&run.step);
 
-    // This *creates* a Run step in the build graph, to be executed when another
-    // step is evaluated that depends on it. The next line below will establish
-    // such a dependency.
-    const run_cmd = b.addRunArtifact(exe);
-
-    // By making the run step depend on the install step, it will be run from the
-    // installation directory rather than directly from within the cache directory.
-    // This is not necessary, however, if the application depends on other installed
-    // files, this ensures they will be present and in the expected location.
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
-    const exe_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe_unit_tests.root_module.addImport("mvzr", mvzr.module("mvzr"));
-    exe_unit_tests.root_module.addImport("sqlite", sqlite.module("sqlite"));
-
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_exe_unit_tests.step);
+    const tests = b.addTest(.{ .root_module = root });
+    b.step("test", "Run unit tests").dependOn(&b.addRunArtifact(tests).step);
 }

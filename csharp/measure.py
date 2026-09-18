@@ -99,11 +99,7 @@ def main():
                     try:
                         shared.workload.wait_ready(server, socket)
                         for endpoint in shared.workload.PAYLOADS:
-                            start_cpu = shared.cpu_seconds(server.pid)
-                            start = shared.time.monotonic()
-                            sample = shared.workload.measure(server, endpoint, socket, directory / endpoint, ['pkgx', 'oha'], args.duration)
-                            wall = shared.time.monotonic() - start
-                            sample['server_cpu_percent'] = (shared.cpu_seconds(server.pid) - start_cpu) / wall * 100
+                            sample = shared.workload.measure(server, endpoint, socket, directory / endpoint, [str(ROOT / 'loadgen/bombard')], args.duration)
                             sample.pop('rss_samples')
                             result[endpoint] = sample
                     finally:
@@ -132,7 +128,7 @@ def main():
               'dotnet_root': os.environ.get('DOTNET_ROOT'),
               'fresh_bundle_extraction': args.fresh_bundle_extraction,
               'dotnet': subprocess.check_output(['pkgx', 'dotnet', '--info'], cwd=PROJECT, text=True),
-              'oha': subprocess.check_output(['pkgx', 'oha', '--version'], text=True).strip(),
+              'load_generator': subprocess.check_output([str(ROOT / 'loadgen/bombard'), '-version'], text=True).strip(),
               'source_sha256': source_hashes}
     (output / 'summary.json').write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(summary, indent=2), flush=True)

@@ -11,3 +11,4 @@ __pycache__/
 # Generated aggregate report; published results live in the READMEs.
 /ocaml/measurements.json
 /rust/measurements.json
+/loadgen/measurements/

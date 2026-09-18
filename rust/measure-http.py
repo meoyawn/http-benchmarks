@@ -34,21 +34,7 @@ def cpu_seconds(pid):
     return int(days) * 86400 + sum(float(part) * 60 ** i for i, part in enumerate(reversed(clock.split(":"))))
 
 
-def verify(database, completed):
-    with sqlite3.connect(database) as db:
-        integrity = db.execute("PRAGMA integrity_check").fetchall()
-        foreign_keys = db.execute("PRAGMA foreign_key_check").fetchall()
-        posts = db.execute("SELECT count(*) FROM posts").fetchone()[0]
-        users = db.execute("SELECT count(*) FROM users").fetchone()[0]
-        invalid = db.execute("SELECT count(*) FROM posts WHERE content IS NOT 'oha benchmark' OR user_id IS NOT 1 OR created_at <= 0 OR updated_at IS NOT created_at").fetchone()[0]
-        sequence = db.execute("SELECT seq FROM sqlite_sequence WHERE name IS 'users'").fetchone()[0]
-        post_sequence = db.execute("SELECT seq FROM sqlite_sequence WHERE name IS 'posts'").fetchone()[0]
-    if integrity != [("ok",)] or foreign_keys or invalid or users != 1:
-        raise RuntimeError("database integrity/content check failed")
-    if not completed <= posts <= completed + 50 or sequence != posts or post_sequence != posts:
-        raise RuntimeError(f"commit/sequence mismatch: {completed=}, {posts=}, {sequence=}, {post_sequence=}")
-    return {"integrity": integrity, "foreign_keys": foreign_keys, "posts": posts, "users": users,
-            "user_sequence": sequence, "post_sequence": post_sequence, "completed_post_responses": completed}
+verify = workload.verify
 
 
 def digest(path):
@@ -66,7 +52,7 @@ def main():
     parser.add_argument("--variant", nargs=3, action="append", metavar=("NAME", "BINARY", "WORKERS"),
                         help="compare named variants with independent worker counts; repeat as needed")
     parser.add_argument("--duration", default="10s")
-    parser.add_argument("--oha", default="pkgx oha")
+    parser.add_argument("--loadgen", default=str(Path(__file__).resolve().parent.parent / "loadgen/bombard"))
     args = parser.parse_args()
     try:
         variants = ({name: (Path(binary).resolve(), int(workers)) for name, binary, workers in args.variant}
@@ -124,13 +110,7 @@ def main():
                 try:
                     workload.wait_ready(server, socket)
                     for endpoint in workload.PAYLOADS:
-                        start_cpu = cpu_seconds(server.pid)
-                        start = time.monotonic()
-                        result = workload.measure(server, endpoint, socket, directory / endpoint, shlex.split(args.oha), args.duration)
-                        wall = time.monotonic() - start
-                        used = cpu_seconds(server.pid) - start_cpu
-                        result.update(server_cpu_seconds=used, cpu_observation_wall_seconds=wall,
-                                      server_cpu_percent=used / wall * 100)
+                        result = workload.measure(server, endpoint, socket, directory / endpoint, shlex.split(args.loadgen), args.duration)
                         (directory / f"{endpoint}.metrics.json").write_text(json.dumps(result, indent=2) + "\n")
                         result.pop("rss_samples")
                         results[name][endpoint].append(result)
@@ -164,7 +144,7 @@ def main():
               "rustc": subprocess.check_output(["rustc", "--version"], cwd=PROJECT, text=True).strip(),
               "cargo_configuration": (PROJECT / ".cargo/config.toml").read_text(),
               "source_sha256": {str(path.relative_to(ROOT)): digest(path) for path in sorted(list((PROJECT / "src").rglob("*.rs")) + [PROJECT / "Cargo.toml", PROJECT / "Cargo.lock", PROJECT / "build.rs", PROJECT / ".cargo/config.toml"])},
-              "oha_version": subprocess.check_output(shlex.split(args.oha) + ["--version"], text=True).strip(),
+              "load_generator": subprocess.check_output(shlex.split(args.loadgen) + ["--version"], text=True).strip(),
               "runs": results, "verification": checks, "summary": summary}
     if args.go_binary:
         record["go_build_info"] = subprocess.check_output(

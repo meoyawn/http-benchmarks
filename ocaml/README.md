@@ -43,7 +43,8 @@ Keep `.tools/sqlite` at that location, or rebuild after moving the checkout.
 | Cohttp/Eio / Eio | 6.3.0 / 1.5 |
 | ATDgen / Yojson | 4.2.0 / 3.0.0 |
 | sqlite3-ocaml / SQLite | 5.4.2 / 3.53.4 |
-| Re / oha | 1.14.0 / 1.16.0 |
+| Re | 1.14.0 |
+| Randomized load driver | [Vegeta 12.13.0](../loadgen/README.md) |
 
 [Production dependencies](http-benchmark.opam) and their [lockfile](http-benchmark.opam.locked)
 pin the library versions. Release builds use `-O3`.
@@ -63,7 +64,34 @@ changes it for all workers (default 1,048,576 words). One connection belongs to
 one writer; the bounded 1,024-request queue resolves each response after its own
 commit. Shutdown stops HTTP producers, drains accepted writes and joins the writer.
 
+## Randomized workload results
+
+The one- and four-HTTP-domain configurations were remeasured on 2026-09-18
+alongside both Rust and both Go settings. Six rotating rounds, fresh processes
+and databases, 50 concurrent requests, ten seconds of `/posts` followed by ten
+seconds of `/echo`, with no HTTP warm-up. The [shared workload](../loadgen/README.md)
+randomly selects from 65,536 valid email/content pairs, including Unicode and
+JSON escapes. RPS, p50 and CPU are medians; RSS is the maximum sample. The same
+HTTP domain count is retained for both endpoints, plus one writer domain.
+These are same-host, unpinned Mac measurements. All domain counters, statuses,
+exact email/content pairs and drained commit counts are verified. Production
+OCaml code and SQL are unchanged.
+
+| HTTP domains + writer | Endpoint | RPS | p50 | Peak RSS | CPU |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 1 + 1 | `/posts` | 29.4K | 1.306ms | 37.0 MiB | 148% |
+| 1 + 1 | `/echo` | 67.6K | 0.692ms | 39.2 MiB | 94% |
+| 4 + 1 | `/posts` | 23.0K | 1.685ms | 95.4 MiB | 226% |
+| 4 + 1 | `/echo` | 139.2K | 0.330ms | 98.2 MiB | 316% |
+
+The `results/random-json-2026-09-18/summary.json` report (gitignored)
+retains all individual samples. Startup and build measurements below retain
+their prior values.
+
 ## Multicore results
+
+The following **historical static-payload** sweep selected the domain counts;
+it is not directly comparable to the new randomized results.
 
 Apple M1 Pro (8 performance + 2 efficiency cores), 16 GiB, macOS 26.4, 2026-09-17.
 Three rotating rounds with Go and Kotlin, fresh processes/databases, 50 connections,
@@ -141,12 +169,19 @@ python3 ocaml/measure-build.py results/ocaml-build
 python3 measure-debug-build.py results/ocaml-debug-build --language ocaml
 ```
 
-The first command reproduces the published rotating comparison; the second is an
-OCaml-only control. `measure-http.py` runs three fresh default-configuration samples.
-Choose fresh output directories. The local generated `measurements.json` report
-(gitignored) stores all final samples, CPU usage, validation, versions and source/artifact hashes, plus
-library-selection trials. Raw oha JSON, RSS samples, logs and databases remain in
-`results/ocaml-2026-09-17/` (gitignored). All completed requests must have the expected
-status; commit counts may exceed received 201 responses by at most 50 when oha
-cancels in-flight requests at the deadline. Integrity, foreign keys, content, user
-counts and AUTOINCREMENT sequences are checked after each run.
+The comparison and scaling commands now use the shared randomized workload;
+they do not reproduce the historical static-payload numbers above.
+`measure-http.py` runs three fresh default-configuration samples. Build the
+load driver first (`task load:build` at the repository root), and choose fresh
+output directories. For the full six-configuration sweep:
+
+```sh
+python3 loadgen/measure.py results/random-json --rounds 6
+```
+
+The `results/random-json-2026-09-18/summary.json` report (gitignored) retains
+all samples and aggregates. Full raw metrics, histograms, RSS samples, logs and
+databases remain locally in `results/random-json-2026-09-18/` (gitignored).
+All responses must have the expected status, and drained HTTP 201 counts must
+exactly equal committed posts. Integrity, foreign keys, email/content pairs,
+timestamps and AUTOINCREMENT sequences are checked after every run.

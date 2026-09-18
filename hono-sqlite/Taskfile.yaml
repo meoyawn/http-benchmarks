@@ -1,5 +1,8 @@
 version: 3
 
+includes:
+  load: {taskfile: ../loadgen/Taskfile.yaml, dir: ../loadgen}
+
 vars:
   BINARY: dist/server
   LOCAL_PORT: 3000
@@ -52,5 +55,5 @@ tasks:
     cmd: ./{{.BINARY}}
 
   post:
-    cmd: >
-      oha http://localhost:3000/posts --no-tui --unix-socket {{.UNIX_SOCKET}} -z 10s -m POST -T 'application/json' -d '{ "content": "bun benchmark", "email": "bun@gmail.com" }'
+    deps: [load:build]
+    cmd: python3 ../loadgen/run.py posts --socket {{.UNIX_SOCKET}} {{.CLI_ARGS}}

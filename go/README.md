@@ -16,7 +16,7 @@ Remeasured on 2026-09-18, using all ten available cores of the Apple M1 Pro.
 | [Tailscale SQLite](https://github.com/tailscale/sqlite/tree/acbe2dadf94c) | `v0.0.0-20260910121735-acbe2dadf94c` |
 | SQLite, compiled into Tailscale's C bindings | 3.53.4 |
 | golang.org/x/sync | 0.23.0 |
-| oha, through pkgx | 1.16.0 |
+| Randomized load driver | [Vegeta 12.13.0](../loadgen/README.md) |
 
 The whole-stack library comparison covered Hertz,
 FastHTTP and `net/http` with goccy, Sonic and both standard JSON APIs. It included
@@ -102,42 +102,42 @@ failure and cancellation during startup.
 
 ## Final release measurements
 
-Four rotating rounds per configuration on 2026-09-18, measured together with
-Rust Actix at one and three workers. Each configuration appears once in every
-order position, with fresh processes/databases, 50 connections, ten seconds of
-`/posts` then ten seconds of `/echo`, and no HTTP warm-up. RPS, p50 and CPU are
-medians; RSS is the largest 100 ms sample across all four runs. CPU sums all
-threads; 100% is one core. Echo retains memory allocated during writes.
+Six rotating rounds per configuration on 2026-09-18, measured together with
+both Rust and OCaml configurations using the [randomized valid JSON workload](../loadgen/README.md).
+Each configuration appears once in every order position, with fresh processes
+and databases, 50 concurrent requests, ten seconds of `/posts` then ten seconds
+of `/echo`, and no HTTP warm-up. RPS, p50 and CPU are medians; RSS is the largest
+100 ms sample. CPU sums all server threads; 100% is one core. Client CPU is
+reported separately. Echo retains memory allocated during writes. Startup below
+retains the earlier measurement. These are same-host, unpinned Mac measurements.
 
 | `GOMAXPROCS` | Endpoint | RPS | p50 | Peak RSS | CPU | Start + bind |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: |
-| 2 | `/posts` | 51.4K | 0.867ms | 23.9 MiB | 148% | 9.26ms |
-| 2 | `/echo` | 270.8K | 0.167ms | 24.2 MiB | 186% | 9.26ms |
-| 4 | `/posts` | 45.0K | 0.995ms | 25.3 MiB | 216% | 8.82ms |
-| 4 | `/echo` | 341.1K | 0.128ms | 25.9 MiB | 315% | 8.82ms |
+| 2 | `/posts` | 31.2K | 1.222ms | 24.8 MiB | 139% | 9.26ms |
+| 2 | `/echo` | 248.9K | 0.171ms | 24.9 MiB | 197% | 9.26ms |
+| 4 | `/posts` | 28.6K | 1.372ms | 26.1 MiB | 183% | 8.82ms |
+| 4 | `/echo` | 300.3K | 0.117ms | 26.4 MiB | 345% | 8.82ms |
 
-Two-processor writes ranged **51.1K–51.5K**, with echo **267.8K–272.6K**.
-Four-processor writes ranged **44.5K–45.1K**, with echo **340.1K–344.3K**.
-Every sample is retained. All completed responses and database checks passed.
-Go source and dependencies are unchanged; both configurations share one freshly
-built executable. This replaces the earlier baseline rather than attributing
-cross-sweep changes to Rust work. [PR #14](https://github.com/meoyawn/http-benchmarks/pull/14)
-records the comparison and measurement limits; the root tables repeat the results.
+Both configurations share one freshly built executable. No production Go code
+or SQL was changed. Every response and database check must pass, including exact
+email/content pairs and drained response/commit counts. Current results use a
+finite corpus of 65,536 randomly selected pairs, so they are not directly
+comparable to historical static-payload results.
 
-From the repository root, after building both Go and Rust release binaries
-(see [Rust setup](../rust/README.md#build-and-run)):
+From the repository root, after building all three servers and the load driver:
 
 ```sh
-python3 rust/measure-http.py results/rust-go-http --rounds 4 --workers 1 3 --go-binary go/bench --gomaxprocs 2 4
+python3 loadgen/measure.py results/random-json --rounds 6
+python3 go/measure-configs.py results/go-http --gomaxprocs 2 4
 python3 go/measure-startup.py results/go-startup --gomaxprocs 2 4
 ```
 
-`task benchmark` and `task measure-startup` in this directory run those same
-configurations. Use fresh output directories. The load script records raw oha
-output, status/error distributions, RSS samples, CPU deltas and database checks.
-Up to 50 in-flight requests can commit after oha's deadline, so stored posts may
-exceed received HTTP 201 responses by at most 50. Samples and artifact hashes are
-retained locally under `results/actix-go-final-2026-09-18/` (gitignored).
+`task benchmark` in this directory builds the shared load driver and runs Go alone.
+All current measurement and
+profiling entrypoints use the same randomized workload. The
+`results/random-json-2026-09-18/summary.json` report (gitignored) retains
+samples and aggregates; full logs and databases are locally under
+`results/random-json-2026-09-18/` (gitignored).
 
 Startup uses five alternating fresh processes per setting, timed immediately
 before launching the executable until receipt of the post-bind `Listening on…`

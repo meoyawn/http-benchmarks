@@ -8,18 +8,29 @@
 ## Results
 
 Apple M1 Pro **10 cores (8 performance + 2 efficiency)**, 16 GiB RAM, macOS 26.4.
-Go and Rust were fully remeasured together on **2026-09-18**, after selecting
-Actix as Rust's only HTTP backend. Their four configurations have **four rotating
-rounds**, each appearing once in every order position, with fresh processes and
-databases. Startup, clean builds, debug rebuilds and artifact sizes were also
-remeasured. [Measurement details and framework decision](https://github.com/meoyawn/http-benchmarks/pull/14).
-OCaml retains its **2026-09-17** measurements; Kotlin JVM/GraalVM and both C#
-modes retain their earlier **2026-09-18** measurements. Those have three runs per
-configuration and were not part of this final Go/Rust sweep. Each process handles
-`/posts` for 10 seconds, then `/echo` for 10 seconds: `pkgx oha` **1.16.0**, 50 connections,
-no HTTP warm-up. RPS and p50 are medians; RAM is the largest sampled RSS.
-Other desktop applications remained running; benchmark loads ran sequentially.
-All other framework rows retain historical results and were not rerun.
+The **ten rows marked †** were remeasured on
+**2026-09-18** using [randomized valid JSON](loadgen/README.md) and **Vegeta 12.13.0**.
+Rust, Go and OCaml use six rotating rounds; C# JIT/AOT, Kotlin JVM and Zig use
+a separate four-round sweep of the same workload. Each configuration appears
+once in every order position within its sweep, with fresh processes and databases.
+Each runs `/posts` for 10 seconds, then `/echo` for 10 seconds, at **50 concurrent requests**, without HTTP warm-up.
+
+The seeded corpus has **65,536 valid email/content pairs** and **32–256 Unicode
+characters** of content, randomly selected per request. It exercises many new
+and existing users. Every response must be **201 / 200**, respectively; clients
+drain outstanding requests and committed rows must match 201 responses exactly.
+RPS, p50 and CPU are medians; RAM is the largest sampled server RSS.
+
+Five independent single-processor client processes reduce client contention.
+This Mac has **no SMT**; an actual affinity probe returned `KERN_NOT_SUPPORTED`.
+These are **same-host, unpinned Unix-socket measurements**, with no enforced
+CPU/cache-domain or NUMA separation. Loads run sequentially, after builds and
+tests; normal desktop applications remain active. Separate client CPU, calibration,
+reproduction commands and isolation limits are in the [load methodology](loadgen/README.md).
+
+**Unmarked rows retain historical static-payload results and are not directly
+comparable to the randomized rows.** Startup, clean/debug build times and
+artifact sizes retain their prior measurements; this sweep updates HTTP metrics.
 
 Go, Kotlin, OCaml, Rust and C# use the same precompiled whole-string ASCII email rule:
 `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`, checked against
@@ -42,8 +53,8 @@ write throughput. These are two parallel OCaml domains in one process. A second
 configuration shows the best echo domain count; both endpoints retain that same
 count within a run. `-domains 1` / `-domains 4` select HTTP domains; the writer
 adds one. Every worker explicitly receives an 8 MiB minor heap.
-The full [1/2/4/8-domain results](ocaml/README.md#multicore-results)
-document the tradeoff.
+The historical [1/2/4/8-domain results](ocaml/README.md#multicore-results)
+document the original domain-count selection.
 The previous single-event-loop OCaml results are superseded.
 
 Kotlin's JVM row uses **OpenJDK 26.0.2.1**, **Kotlin 2.4.20**, **Vert.x Web 5.1.8**,
@@ -83,76 +94,63 @@ and dynamic PGO defaults. AOT optimizes for speed and targets the host CPU.
 Setup, library comparisons and tradeoffs: [C#](csharp/README.md).
 
 ```sh
-oha http://localhost/posts --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "oha@gmail.com" }'
+task post
 ```
 
-Use `pkgx oha` if `oha` is not installed.
+Build and reproduction: [randomized load runner](loadgen/README.md). `task benchmark` reruns Rust/Go/OCaml; the load-runner documentation includes the additional C#/Kotlin/Zig sweep.
 
 ## SQLite write throughput
 
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild | Release binary size |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [Go FastHTTP (`GOMAXPROCS=2`)](go/) | 51.4K | 0.867ms | 23.9 MiB | 148% | 9.26ms | 19.87s | 1.03s | 7.78 MiB |
-| [Rust Actix (`-workers 1`)](rust/) | 49.4K | 0.945ms | 11.1 MiB | 141% | 12.68ms | 43.20s | 1.23s | 1.70 MiB |
-| [C# .NET JIT](csharp/) | 48.4K | 0.908ms | 168.7 MiB | 320% | 166.47ms | 15.83s | 0.707s | 1.81 MiB (bundle) |
-| [C# .NET AOT](csharp/) | 48.2K | 0.906ms | 105.3 MiB | 307% | 89.28ms | 24.85s | 0.707s (JIT) | 9.19 MiB |
-| [Rust Actix (`-workers 3`)](rust/) | 47.8K | 0.982ms | 11.9 MiB | 159% | 10.67ms | 43.20s | 1.23s | 1.70 MiB |
-| Kotlin Vert.x SQLite Panama (JVM) | 45.3K | 0.992ms | 170.7 MiB | 191% | 183.04ms | 21.15s | 1.09s | 15.07 MiB (JAR) |
-| [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) | 45.1K | 0.973ms | 35.6 MiB | 157% | 8.92ms | 1.12s | 0.521s | 4.60 MiB |
-| [Go FastHTTP (`GOMAXPROCS=4`)](go/) | 45.0K | 0.995ms | 25.3 MiB | 216% | 8.82ms | 19.87s | 1.03s | 7.78 MiB |
-| Zig http.zig | 43K | 1ms | — | — | — | — | — | — |
-| [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) | 35.1K | 1.298ms | 89.6 MiB | 261% | 10.00ms | 1.12s | 0.521s | 4.60 MiB |
+| [Go FastHTTP (`GOMAXPROCS=2`)](go/) † | 31.2K | 1.222ms | 24.8 MiB | 139% | 9.26ms | 19.87s | 1.03s | 7.78 MiB |
+| [C# .NET JIT](csharp/) † | 31.0K | 1.210ms | 169.0 MiB | 278% | 166.47ms | 15.83s | 0.707s | 1.81 MiB (bundle) |
+| [Rust Actix (`-workers 1`)](rust/) † | 30.8K | 1.238ms | 11.3 MiB | 130% | 12.68ms | 43.20s | 1.23s | 1.70 MiB |
+| [C# .NET AOT](csharp/) † | 30.0K | 1.232ms | 105.6 MiB | 257% | 89.28ms | 24.85s | 0.707s (JIT) | 9.19 MiB |
+| [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) † | 29.4K | 1.306ms | 37.0 MiB | 148% | 8.92ms | 1.12s | 0.521s | 4.60 MiB |
+| [Rust Actix (`-workers 3`)](rust/) † | 29.2K | 1.298ms | 12.3 MiB | 141% | 10.67ms | 43.20s | 1.23s | 1.70 MiB |
+| Kotlin Vert.x SQLite Panama (JVM) † | 28.8K | 1.259ms | 176.3 MiB | 183% | 183.04ms | 21.15s | 1.09s | 15.07 MiB (JAR) |
+| [Go FastHTTP (`GOMAXPROCS=4`)](go/) † | 28.6K | 1.372ms | 26.1 MiB | 183% | 8.82ms | 19.87s | 1.03s | 7.78 MiB |
+| [Zig http.zig](zig/) † | 27.4K | 0.485ms | 7.9 MiB | 114% | — | — | — | — |
+| [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) † | 23.0K | 1.685ms | 95.4 MiB | 226% | 10.00ms | 1.12s | 0.521s | 4.60 MiB |
 | JS Bun Hono | 21K | 1.9ms | — | — | — | — | — | — |
 | Python Blacksheep | 19K | 2.5ms | — | — | — | — | — | — |
 | Elixir Bandit | 10K | 4.9ms | — | — | — | — | — | — |
 | [Kotlin Vert.x SQLite Panama (GraalVM)](kotlin/#optimized-graalvm-executable) | 8.9K | 5.109ms | 104.6 MiB | 116% | 29.62ms | 149.49s | 1.09s (JVM) | 88.12 MiB |
 
-Go measures **51.4K writes/sec** with `GOMAXPROCS=2` and
-**341.1K echo RPS** with `GOMAXPROCS=4`. The other endpoints measure
-**270.8K echo** and **45.0K writes/sec**, respectively. Two-processor
-writes ranged **51.1K–51.5K**; four-processor echo ranged **340.1K–344.3K**.
-Go's source and dependencies are unchanged. The same freshly built executable
-serves both configurations. These new measurements replace the earlier baseline;
-changes across separate sweeps are not evidence that Rust work improved Go.
+With randomized JSON, Go measures **31.2K writes/sec** at
+`GOMAXPROCS=2` and **300.3K echo RPS** at `GOMAXPROCS=4`.
+The other endpoints measure **248.9K echo** and **28.6K writes/sec**, respectively.
+The same freshly built executable serves both settings. Server code and SQL are
+unchanged. Differences from the previous single-user results reflect a new
+workload and client, not a controlled implementation regression comparison.
 
-The retained Kotlin JVM measurements are **45.3K writes/sec** and **373.0K echo RPS**.
-These are three-run medians, not the best individual samples; JVM writes ranged from 40.3K–45.4K and
-echo from 362.2K–378.2K. JVM peak sampled RSS is **170.7 / 490.3 MiB** for
-writes/echo; the echo maximum comes from the first run's higher RSS.
+Kotlin JVM measures **28.8K writes/sec** and **365.0K echo RPS**
+with randomized JSON. Its four-run write/echo peak RSS is **176.3 / 434.7 MiB**.
 
 Kotlin GraalVM measures **8.9K writes/sec** and **306.2K echo RPS**, with a
 **29.62ms** startup median. Native writes ranged from **8.77K–8.95K**, and echo
-from **306.0K–307.8K**. It has lower throughput and sampled RSS than the JVM.
+from **306.0K–307.8K**. These native results retain the earlier static-payload workload.
 The native write bottleneck has not been profiled. Every JVM and native run
 passed response and database checks.
 
-Rust measures **49.4K writes/sec** with one HTTP worker and
-**415.0K echo RPS** with three. One-worker writes ranged
-**49.2K–49.7K**; three-worker echo ranged **407.1K–417.4K**.
-These are measurements of the retained Actix implementation, replacing its older
-48.5K / 400.4K entries. Compare Go and Rust within this sweep; rows from other
-languages retain earlier measurements and do not establish a controlled ranking
-against these new numbers.
+Rust measures **30.8K writes/sec** with one HTTP worker and
+**397.9K echo RPS** with three. One-worker writes ranged
+**30.5K–31.7K**; three-worker echo ranged **388.7K–400.2K**.
+OCaml measures **29.4K writes/sec / 67.6K echo** with one HTTP domain,
+and **23.0K / 139.2K** with four. Both keep a dedicated writer.
+These six configurations share the randomized workload and measurement sweep.
+C#, Kotlin JVM and Zig use the same workload in the subsequent four-round sweep.
 
-C# measures **48.4K writes/sec (JIT)** and **48.2K (Native AOT)**,
-with **368.8K / 349.2K echo RPS** using the same configuration for both endpoints.
-The HTTP/JSON setup correction replaces the earlier 146.2K / 136.3K echo results:
-inline I/O scheduling and ordinary buffered JSON responses avoid extra queue
-transfers and chunked response framing. The JSON helper is generic; it has no
-model-size assumptions or fixed response data. SQLite transactions and immediate
-per-commit replies are unchanged.
+C# measures **31.0K writes/sec (JIT)** and **30.0K (Native AOT)**,
+with **324.8K / 290.8K echo RPS**, respectively. Both keep the same server
+configuration across endpoints. Its startup/build/size figures retain the prior
+measurements; JIT startup predates bundling and excludes bundle extraction.
 
-Write runs ranged **44.1K–48.8K (JIT)** and **47.6K–48.7K (AOT)**;
-echo ranged **362.2K–382.0K / 340.6K–350.8K**. All three samples are retained,
-including the slower JIT write run. Small differences between write medians do
-not establish a stable ordering. The historical 45K / 190K C# row is not a
-controlled baseline. The earlier 47.4K versus 44.3K AOT concern and the separate
-HTTP setup experiments are documented in [C#](csharp/README.md#regression-check).
-
-C# performance and startup figures above retain the preceding measurements.
-Only release size was updated for the JIT bundle. New timing and throughput
-measurements are excluded because they overlapped background video playback.
-JIT's retained startup figure predates bundling and excludes bundle extraction.
+Zig measures **27.4K writes/sec / 372.4K echo RPS** after updating to the latest
+compiler available through pkgx (**0.15.2**) and compatible dependencies. It uses
+the shared SQLite **3.53.4** engine, one I/O worker and four request threads with
+thread-local buffers. Insert SQL is unchanged. [Build and update details](zig/README.md).
 
 Both Kotlin rows were fully remeasured after removing Jackson, staging native
 libraries at build time and adding a HotSpot class/linkage/profile cache for the
@@ -223,8 +221,8 @@ root with a fresh output directory:
 python3 measure-debug-build.py results/debug-build
 ```
 
-**Clean release build** reports three-run medians. Go and Rust were remeasured
-in the final sweep. Both Kotlin modes retain their preceding remeasurement; the remaining languages retain
+**Clean release build** reports three-run medians. Go and Rust retain the
+preceding static-payload sweep's build measurements. Both Kotlin modes retain their preceding remeasurement; the remaining languages retain
 their earlier measurements.
 Definitions differ by language:
 
@@ -301,7 +299,7 @@ only FastHTTP, the standard JSON engine and Tailscale SQLite. Go 1.27's v1 JSON
 compatibility API delegates to that same v2 engine.
 
 Peak RAM is whole-process RSS sampled with `ps` approximately every 100 ms, in MiB
-(2²⁰ bytes), including native SQLite and all domains/threads but excluding oha.
+(2²⁰ bytes), including native SQLite and all domains/threads but excluding the load generator.
 It is a sampled peak, not a kernel high-water mark or managed heap size. Echo
 retains memory from the preceding write workload. CPU utilization is median
 whole-process CPU-time delta divided by elapsed wall time around the load, summed
@@ -316,43 +314,42 @@ across all threads/domains; **100% equals one core**. `—` means unmeasured.
 HTTP POST JSON echo: parse the request and serialize its two fields.
 
 ```sh
-oha http://localhost/echo --no-tui --unix-socket /tmp/benchmark.sock -z 10s -m POST -T 'application/json' -d '{ "content": "oha benchmark", "email": "foo@gmail.com" }'
+task echo
 ```
 
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [Rust Actix (`-workers 3`)](rust/) | 415.0K | 0.092ms | 12.3 MiB | 232% | 10.67ms | 43.20s | 1.23s |
-| Kotlin Vert.x (JVM) | 373.0K | 0.096ms | 490.3 MiB | 277% | 183.04ms | 21.15s | 1.09s |
-| [C# .NET JIT](csharp/) | 368.8K | 0.116ms | 170.0 MiB | 258% | 166.47ms | 15.83s | 0.707s |
-| [C# .NET AOT](csharp/) | 349.2K | 0.126ms | 105.9 MiB | 267% | 89.28ms | 24.85s | 0.707s (JIT) |
-| [Go FastHTTP (`GOMAXPROCS=4`)](go/) | 341.1K | 0.128ms | 25.9 MiB | 315% | 8.82ms | 19.87s | 1.03s |
+| [Rust Actix (`-workers 3`)](rust/) † | 397.9K | 0.093ms | 13.5 MiB | 269% | 10.67ms | 43.20s | 1.23s |
+| [Zig http.zig](zig/) † | 372.4K | 0.111ms | 7.9 MiB | 310% | — | — | — |
+| Kotlin Vert.x (JVM) † | 365.0K | 0.093ms | 434.7 MiB | 380% | 183.04ms | 21.15s | 1.09s |
+| [C# .NET JIT](csharp/) † | 324.8K | 0.132ms | 172.1 MiB | 300% | 166.47ms | 15.83s | 0.707s |
 | [Kotlin Vert.x (GraalVM)](kotlin/#optimized-graalvm-executable) | 306.2K | 0.131ms | 90.1 MiB | 341% | 29.62ms | 149.49s | 1.09s (JVM) |
-| [Go FastHTTP (`GOMAXPROCS=2`)](go/) | 270.8K | 0.167ms | 24.2 MiB | 186% | 9.26ms | 19.87s | 1.03s |
-| Zig http.zig | 264K | 0.2ms | — | — | — | — | — |
-| [Rust Actix (`-workers 1`)](rust/) | 224.4K | 0.172ms | 11.4 MiB | 95% | 12.68ms | 43.20s | 1.23s |
+| [Go FastHTTP (`GOMAXPROCS=4`)](go/) † | 300.3K | 0.117ms | 26.4 MiB | 345% | 8.82ms | 19.87s | 1.03s |
+| [C# .NET AOT](csharp/) † | 290.8K | 0.154ms | 106.2 MiB | 299% | 89.28ms | 24.85s | 0.707s (JIT) |
+| [Go FastHTTP (`GOMAXPROCS=2`)](go/) † | 248.9K | 0.171ms | 24.9 MiB | 197% | 9.26ms | 19.87s | 1.03s |
+| [Rust Actix (`-workers 1`)](rust/) † | 201.4K | 0.201ms | 12.5 MiB | 99% | 12.68ms | 43.20s | 1.23s |
 | Python Blacksheep | 192K | 0.2ms | — | — | — | — | — |
-| [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) | 160.4K | 0.295ms | 93.2 MiB | 297% | 10.00ms | 1.12s | 0.521s |
 | JS Bun Hono | 156K | 0.3ms | — | — | — | — | — |
+| [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) † | 139.2K | 0.330ms | 98.2 MiB | 316% | 10.00ms | 1.12s | 0.521s |
 | Elixir Bandit | 139K | 0.3ms | — | — | — | — | — |
-| [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) | 89.5K | 0.515ms | 37.9 MiB | 88% | 8.92ms | 1.12s | 0.521s |
+| [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) † | 67.6K | 0.692ms | 39.2 MiB | 94% | 8.92ms | 1.12s | 0.521s |
 
-OCaml's default used **157% CPU during writes** (100% is one core); the 4-HTTP-domain configuration used **297% during echo**. Every HTTP domain served requests, verified by counters. More HTTP domains improve echo but add coordination to SQLite's serialized writer.
+All randomized requests returned the expected status. Every database passed
+integrity, foreign-key, timestamp, exact email/content-pair and AUTOINCREMENT
+checks. Drained 201 responses equal committed rows exactly. Both endpoints keep
+the same artifact and server configuration. Each OCaml HTTP domain served requests.
 
-All completed requests returned the expected status. Every database passed
-integrity, foreign-key, stored-content, single-user and AUTOINCREMENT checks.
-oha cancels in-flight requests at its deadline; commits exceeded received 201
-responses by at most 50 per run. Both endpoints share one artifact per
-configuration and therefore build timings. Each C# deployment mode has its own artifact and clean-build timing.
+The `results/random-json-2026-09-18/summary.json` report (gitignored) contains
+the Rust/Go/OCaml rounds, verification, client CPU, topology and artifact hashes.
+The additional four-stack sweep is in `results/random-json-remaining-2026-09-18/summary.json`
+(gitignored), with its raw logs, histograms and databases alongside it.
+Full raw JSON, histograms, RSS samples, logs and databases remain locally under
+`results/random-json-2026-09-18/` (gitignored). Historical reports remain under
+`results/actix-go-final-2026-09-18/` and `results/ocaml-2026-09-17/`.
 
-The local generated `ocaml/measurements.json` report (gitignored) contains individual
-samples, validation, CPU usage, versions and source/artifact hashes. Raw oha JSON,
-RSS samples, logs and databases are in `results/ocaml-2026-09-17/` (gitignored).
-Final Go/Rust samples and logs are in
-`results/actix-go-final-2026-09-18/` locally (gitignored). Rust reproduction
-commands are in [its README](rust/README.md#reproduce-measurements).
 Both Kotlin modes' complete measurements are in
 `results/kotlin-complete-2026-09-18/` (gitignored): `runtimes/summary.json` contains
-all table values, artifact/source hashes, startup checks and database verification;
+the historical static-payload values, artifact/source hashes, startup checks and database verification;
 `jvm-build/`, `native-build/` and `debug-build/` contain build logs and raw timings.
 [Reproduction commands](kotlin/README.md#optimized-graalvm-executable).
 
@@ -386,4 +383,4 @@ python3 csharp/measure.py results/csharp-startup --mode jit aot --startup --fres
 python3 csharp/measure-build.py results/csharp-build --mode jit aot
 ```
 
-Use fresh output directories. Both tables are sorted by descending RPS.
+Use fresh output directories. Both tables are sorted by descending RPS; † rows use randomized JSON; unmarked rows retain the older static workload.

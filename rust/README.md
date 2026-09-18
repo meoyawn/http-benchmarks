@@ -9,19 +9,22 @@ columns. `/echo` parses and reserializes the two request fields.
 
 | HTTP workers + one writer | Endpoint | RPS | p50 | Peak RSS | CPU | Startup |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| 1 | `/posts` | 49.4K | 0.945ms | 11.1 MiB | 141% | 12.68ms |
-| 1 | `/echo` | 224.4K | 0.172ms | 11.4 MiB | 95% | 12.68ms |
-| 3 | `/posts` | 47.8K | 0.982ms | 11.9 MiB | 159% | 10.67ms |
-| 3 | `/echo` | 415.0K | 0.092ms | 12.3 MiB | 232% | 10.67ms |
+| 1 | `/posts` | 30.8K | 1.238ms | 11.3 MiB | 130% | 12.68ms |
+| 1 | `/echo` | 201.4K | 0.201ms | 12.5 MiB | 99% | 12.68ms |
+| 3 | `/posts` | 29.2K | 1.298ms | 12.3 MiB | 141% | 10.67ms |
+| 3 | `/echo` | 397.9K | 0.093ms | 13.5 MiB | 269% | 10.67ms |
 
-Measured on the root README's M1 Pro on 2026-09-18, in the same four rotating
-rounds as both Go configurations. Every configuration appears once in each order
-position, with fresh processes/databases, 50 connections, 10 seconds of writes
-then 10 seconds of echo, and no HTTP warm-up. RPS, latency and CPU are medians;
-RAM is the largest sampled whole-process RSS. All samples are retained.
-One worker is the write default; three workers are the selected echo setting.
-Each setting is fixed for both endpoints. One-worker writes ranged
-**49.2K–49.7K**; three-worker echo ranged **407.1K–417.4K**.
+Measured on the root README's M1 Pro on 2026-09-18, in the same six rotating
+rounds as both Go and both OCaml configurations, using
+[randomized valid JSON](../loadgen/README.md). Every configuration appears once
+in every order position, with fresh processes/databases, 50 concurrent requests,
+ten seconds of writes then ten seconds of echo, and no HTTP warm-up. RPS,
+latency and CPU are medians; RAM is the largest sampled server RSS. These are
+same-host, unpinned UDS measurements. Client CPU is reported separately.
+One worker is the write default; three workers are the echo setting. Each is
+fixed for both endpoints. Startup and artifact-size figures retain their prior
+measurement. Server code and SQL are unchanged; historical static-payload
+framework-selection results below are not directly comparable to this workload.
 
 Actix is the only HTTP backend. The framework decision and comparison are
 documented in [PR #14](https://github.com/meoyawn/http-benchmarks/pull/14).
@@ -209,12 +212,18 @@ python3 rust/measure-build.py results/rust-build
 python3 measure-debug-build.py results/rust-debug-build --language rust
 ```
 
-The HTTP runner uses oha 1.16.0 and the protocol of PR #4. Whole-process RSS is
-sampled approximately every 100 ms; CPU sums every thread, with 100% equal to one
-core. Echo retains allocations from writes. Each database is checked for
-integrity, foreign keys, stored content, AUTOINCREMENT and committed row counts.
-oha cancels requests at its deadline, so up to 50 commits can lack a received
-response. All completed requests must have the expected HTTP status.
+The HTTP runner now uses the shared [randomized Vegeta workload](../loadgen/README.md).
+Whole-process RSS is sampled approximately every 100 ms; CPU sums every thread,
+with 100% equal to one core. Echo retains allocations from writes. Every database
+is checked for integrity, foreign keys, exact email/content pairs, timestamps,
+AUTOINCREMENT and committed row counts. In-flight requests drain; the number of
+committed posts must exactly equal received HTTP 201 responses. The
+`results/random-json-2026-09-18/summary.json` report (gitignored)
+retains every sample. Reproduce the complete sweep from the repository root:
+
+```sh
+python3 loadgen/measure.py results/random-json --rounds 6
+```
 
 Startup is the median of five launches through the post-bind listening log,
 including SQLite initialization, library loading and HTTP worker construction.

@@ -1,11 +1,24 @@
 version: 3
 
 tasks:
+  sqlite:
+    run: once
+    cmd: python3 ../db/prepare-sqlite.py --project . --prefix .tools/sqlite
+    sources:
+      - ../db/prepare-sqlite.py
+      - ../db/sqlite-config.json
+    generates:
+      - .tools/sqlite/lib/libsqlite3.*
+
   build:
-    cmd: zig build -Doptimize=ReleaseFast
+    run: once
+    deps: [sqlite]
+    cmd: python3 zig.py build -Doptimize=ReleaseFast
     sources:
       - src/**/*
       - build.zig*
+      - zig.py
+      - ../db/migrations/*.sql
     generates:
       - zig-out/bin/zig
 
@@ -15,9 +28,10 @@ tasks:
     cmd: zig-out/bin/zig
 
   test:
-    cmd: zig build test --summary all
+    deps: [sqlite]
+    cmd: python3 zig.py build test --summary all
     sources:
       - src/**/*
       - build.zig*
-    generates:
-      - zig-out/bin/zig
+      - zig.py
+      - ../db/migrations/*.sql

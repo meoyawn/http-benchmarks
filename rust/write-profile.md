@@ -175,7 +175,8 @@ pinned fgprof dependency. It leaves production sources and go.mod unchanged.
 Both scripts retain commands, artifact hashes, profiler output and database
 verification. Go also emits `top.txt`. Rust emits `stacks.txt` or `cpu.trace`.
 Their displayed throughput includes profiler overhead and must not enter the
-ranking. The scripts use Python 3 and `pkgx oha` by default (`--oha` overrides it).
+ranking. The scripts use Python 3 and the [shared randomized Vegeta driver](../loadgen/README.md)
+by default (`--loadgen` overrides it). Earlier profile numbers used static payloads.
 
 After building ordinary optimized binaries, run a rotating comparison without
 profilers from the repository root:

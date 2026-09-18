@@ -31,7 +31,7 @@ def main():
     parser.add_argument("--native", type=Path, default=PROJECT / "build/native/nativeCompile/kotlin-bench")
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--startup-rounds", type=int, default=5)
-    parser.add_argument("--oha", default="pkgx oha")
+    parser.add_argument("--loadgen", default=str(Path(__file__).resolve().parent.parent / "loadgen/bombard"))
     args = parser.parse_args()
     binary = args.native.resolve()
     if not binary.is_file() or min(args.rounds, args.startup_rounds) < 1:
@@ -47,7 +47,7 @@ def main():
         directory = output / f"http-{index + 1}"
         subprocess.run([sys.executable, str(PROJECT / "measure-http.py"), str(directory),
                         "--native", str(binary), "--socket", f"/tmp/kotlin-native-{os.getpid()}.sock",
-                        "--oha", args.oha], check=True)
+                        "--loadgen", args.loadgen], check=True)
         for endpoint in runs:
             result = json.loads((directory / f"{endpoint}.metrics.json").read_text())
             result.pop("rss_samples")
@@ -83,7 +83,7 @@ def main():
               "method": "Three fresh processes/databases by default; 50 connections; posts then echo, 10s each; no HTTP warm-up; medians except maximum sampled RSS; 100% CPU equals one core",
               "artifact_bytes": binary.stat().st_size, "runs": runs, "verification": checks,
               "runtime_libraries": {p.name: {"sha256": digest(p), "bytes": p.stat().st_size} for p in sidecars},
-              "oha_version": subprocess.check_output(shlex.split(args.oha) + ["--version"], text=True).strip(),
+              "load_generator": subprocess.check_output(shlex.split(args.loadgen) + ["--version"], text=True).strip(),
               "startup_runs": starts, "summary": summary,
               "source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sorted(
                   list((PROJECT / "src/main").rglob("*")) + [PROJECT / "build.gradle", PROJECT / "gradle.properties"])

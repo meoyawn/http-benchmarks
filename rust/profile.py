@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--profiler", choices=("sample", "instruments"), default="sample")
     parser.add_argument("--seconds", type=int, default=10)
-    parser.add_argument("--oha", default="pkgx oha")
+    parser.add_argument("--loadgen", default=str(Path(__file__).resolve().parent.parent / "loadgen/bombard"))
     args = parser.parse_args()
     if platform.system() != "Darwin" or args.workers < 1 or args.seconds < 1 or not args.binary.is_file():
         parser.error("requires macOS, a built binary and positive workers/seconds")
@@ -59,7 +59,7 @@ def main():
             profiler = subprocess.Popen(profile_command, env=env, stdout=profiler_log, stderr=subprocess.STDOUT)
             # Allow recorder startup time while continuing to exercise the server.
             result = benchmark.workload.measure(server, "posts", socket, output / "posts",
-                                                shlex.split(args.oha), f"{args.seconds + 10}s")
+                                                shlex.split(args.loadgen), f"{args.seconds + 10}s")
             if profiler.wait(timeout=30):
                 raise RuntimeError(f"profiler failed; see {output / 'profiler.log'}")
         finally:
