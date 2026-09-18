@@ -1,15 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-
-    <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
-        <Nullable>enable</Nullable>
-    </PropertyGroup>
-
-    <ItemGroup>
-        <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0"/>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0"/>
-        <PackageReference Include="System.Threading.Channels" Version="9.0.0"/>
-        <PackageReference Include="xunit" Version="2.9.3"/>
-    </ItemGroup>
-
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <IlcOptimizationPreference>Speed</IlcOptimizationPreference>
+    <IlcInstructionSet>native</IlcInstructionSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PublishReadyToRun)' == 'true'">
+    <PublishReadyToRunCrossgen2ExtraArgs>--instruction-set:native</PublishReadyToRunCrossgen2ExtraArgs>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="experiments/**/*.cs" />
+    <Content Remove="experiments/**;global.json" />
+    <Content Update="appsettings*.json" CopyToPublishDirectory="Never" Condition="'$(PublishSingleFile)' == 'true'" />
+    <None Include=".tools/sqlite/lib/libsqlite3.*" Exclude="**/*.json" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -1,20 +1,56 @@
 version: 3
 
 vars:
-  BINARY: bin/Release/net9.0/csharp.dll
+  RID: '{{if eq OS "darwin"}}osx{{else}}{{OS}}{{end}}-{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
+  SQLITE_LIBRARY: '.tools/sqlite/lib/libsqlite3.{{if eq OS "darwin"}}dylib{{else}}so{{end}}'
 
 tasks:
-  build:
-    cmd: dotnet build --configuration Release
+  sqlite:
+    run: once
+    cmd: python3 ../db/prepare-sqlite.py --project . --prefix .tools/sqlite --extra-source sqlite-config.c
     sources:
-      - "**/*.cs*"
-      - "appsettings.*"
+      - sqlite-config.c
+      - ../db/prepare-sqlite.py
+      - ../db/sqlite-config.json
     generates:
-      - "{{.BINARY}}"
-  
+      - '{{.SQLITE_LIBRARY}}'
+      - '{{.SQLITE_LIBRARY}}.build.json'
+
+  build:
+    run: once
+    deps: [sqlite]
+    cmd: pkgx dotnet publish -c Release -r {{.RID}} --self-contained false -p:PublishSingleFile=true -o bin/jit
+
+  build-aot:
+    run: once
+    deps: [sqlite]
+    cmd: pkgx dotnet publish -c Release -r {{.RID}} -p:PublishAot=true -p:IlcOptimizationPreference=Speed -o bin/aot
+
+  build-r2r:
+    run: once
+    deps: [sqlite]
+    cmd: pkgx dotnet publish -c Release -r {{.RID}} --self-contained false -p:PublishReadyToRun=true -o bin/r2r
+
   start:
-    deps:
-      - build
-    cmds:
-      - rm -rf /tmp/benchmark.sock
-      - dotnet {{.BINARY}}
+    deps: [build]
+    cmd: pkgx +dotnet bin/jit/csharp
+
+  start-aot:
+    deps: [build-aot]
+    cmd: bin/aot/csharp
+
+  start-r2r:
+    deps: [build-r2r]
+    cmd: pkgx dotnet bin/r2r/csharp.dll
+
+  test:
+    deps: [build]
+    cmd: python3 test-http.py --bundle bin/jit/csharp
+
+  test-aot:
+    deps: [build-aot]
+    cmd: python3 test-http.py --command bin/aot/csharp
+
+  test-r2r:
+    deps: [build-r2r]
+    cmd: python3 test-http.py --command 'pkgx dotnet bin/r2r/csharp.dll'
