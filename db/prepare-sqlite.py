@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the common optimized SQLite engine for Kotlin and OCaml."""
+"""Build the common optimized SQLite engine and optional language ABI shims."""
 
 import argparse
 import hashlib
@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--offline", action="store_true")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--extra-source", type=Path, action="append", default=[], help="Compile an ABI shim into the same library")
     args = parser.parse_args()
     tools = args.project.resolve() / ".tools"
     tools.mkdir(exist_ok=True)
@@ -62,7 +63,9 @@ def main():
     command = shlex.split(os.environ.get("CC", "cc")) + CONFIG["cflags"]
     command += ["-D" + define for define in DEFINES]
     command += (["-dynamiclib", "-Wl,-install_name,@rpath/libsqlite3.dylib"] if system == "Darwin" else ["-shared", "-fPIC"])
-    command += [str(source / "sqlite3.c"), "-o", str(args.output)]
+    command += ["-I", str(source), str(source / "sqlite3.c")]
+    command += [str(path.resolve()) for path in args.extra_source]
+    command += ["-o", str(args.output)]
     if system == "Linux":
         command += ["-pthread", "-ldl", "-lm"]
     print(shlex.join(command), flush=True)
