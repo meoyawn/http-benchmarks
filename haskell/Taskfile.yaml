@@ -1,0 +1,21 @@
+version: '3'
+
+tasks:
+  setup:
+    run: once
+    cmd: python3 build.py --setup
+
+  build:
+    run: once
+    cmd: python3 build.py
+
+  debug:
+    cmd: python3 build.py --debug
+
+  run:
+    deps: [build]
+    cmd: bin/haskell-benchmark {{.CLI_ARGS}}
+
+  test:
+    deps: [build]
+    cmd: python3 test.py

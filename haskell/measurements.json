@@ -1,0 +1,1303 @@
+{
+  "date": "2026-09-22",
+  "versions": {
+    "ghc": "9.14.1",
+    "cabal": "3.14.2.0",
+    "warp": "3.4.16",
+    "time-manager": "0.4.0",
+    "aeson": "2.3.2.0",
+    "jsonifier": "0.2.1.3",
+    "direct-sqlite": "2.3.29",
+    "sqlite": "3.53.4"
+  },
+  "host": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "transport": "HTTP/1.1 over Unix domain sockets",
+    "isolation": "same physical host; no enforced CPU, LLC or NUMA separation",
+    "nic_queues": "not applicable to Unix domain sockets",
+    "sysctl": {
+      "hw.physicalcpu": 10,
+      "hw.logicalcpu": 10,
+      "hw.nperflevels": 2,
+      "hw.memsize": 17179869184,
+      "hw.perflevel0.physicalcpu": 8,
+      "hw.perflevel0.logicalcpu": 8,
+      "hw.perflevel0.cpusperl2": 4,
+      "hw.perflevel0.l2cachesize": 12582912,
+      "hw.perflevel1.physicalcpu": 2,
+      "hw.perflevel1.logicalcpu": 2,
+      "hw.perflevel1.cpusperl2": 2,
+      "hw.perflevel1.l2cachesize": 4194304
+    },
+    "smt": false,
+    "affinity_probe": {
+      "policy": "THREAD_AFFINITY_POLICY (cache hint, not hard binding)",
+      "return_code": 46,
+      "message": "(os/kern) service not supported"
+    },
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded\n"
+  },
+  "method": "Rotating order; fresh processes/databases; 50 concurrent requests; posts then echo; no HTTP warm-up; outstanding requests drain; medians except maximum RSS; 100% CPU = one core",
+  "rounds": 4,
+  "duration": "10s",
+  "corpus_seed": 20260918,
+  "corpus_entries": 65536,
+  "load_generator": "vegeta/v12.13.0 randomized-v1",
+  "http": {
+    "raw_report": "results/haskell-multicore-final-2026-09-22/summary.json",
+    "complete": true,
+    "configurations": {
+      "haskell-2": {
+        "binary": "haskell/bin/haskell-benchmark",
+        "args": [
+          "+RTS",
+          "-N2",
+          "-A8m",
+          "-RTS"
+        ],
+        "env": {}
+      },
+      "haskell-4": {
+        "binary": "haskell/bin/haskell-benchmark",
+        "args": [
+          "+RTS",
+          "-N4",
+          "-A8m",
+          "-RTS"
+        ],
+        "env": {}
+      }
+    },
+    "order": [
+      [
+        "haskell-2",
+        "haskell-4"
+      ],
+      [
+        "haskell-4",
+        "haskell-2"
+      ],
+      [
+        "haskell-2",
+        "haskell-4"
+      ],
+      [
+        "haskell-4",
+        "haskell-2"
+      ]
+    ],
+    "summary": {
+      "haskell-2": {
+        "posts": {
+          "rps_median": 31286.94842111783,
+          "rps_min": 30078.179911979863,
+          "rps_max": 31411.172149452574,
+          "p50_ms_median": 0.609,
+          "p95_ms_median": 4.229,
+          "p99_ms_median": 24.247,
+          "peak_rss_mib_max": 150.8125,
+          "server_cpu_percent_median": 148.71337180584683,
+          "client_cpu_percent_median": 102.05391890688017,
+          "client_peak_rss_mib_max": 257.546875
+        },
+        "echo": {
+          "rps_median": 243942.53919639625,
+          "rps_min": 243159.48090817276,
+          "rps_max": 245447.94836059943,
+          "p50_ms_median": 0.1785,
+          "p95_ms_median": 0.35150000000000003,
+          "p99_ms_median": 0.542,
+          "peak_rss_mib_max": 153.703125,
+          "server_cpu_percent_median": 194.12948564214975,
+          "client_cpu_percent_median": 438.70193737090085,
+          "client_peak_rss_mib_max": 257.5
+        }
+      },
+      "haskell-4": {
+        "posts": {
+          "rps_median": 29413.217746335813,
+          "rps_min": 29033.3403447203,
+          "rps_max": 29605.25657662286,
+          "p50_ms_median": 0.9924999999999999,
+          "p95_ms_median": 4.5489999999999995,
+          "p99_ms_median": 22.495,
+          "peak_rss_mib_max": 101.15625,
+          "server_cpu_percent_median": 175.71134050466992,
+          "client_cpu_percent_median": 112.54952673488069,
+          "client_peak_rss_mib_max": 257.140625
+        },
+        "echo": {
+          "rps_median": 304126.5072572464,
+          "rps_min": 302843.3993522103,
+          "rps_max": 305149.1524989922,
+          "p50_ms_median": 0.11299999999999999,
+          "p95_ms_median": 0.36150000000000004,
+          "p99_ms_median": 0.609,
+          "peak_rss_mib_max": 103.046875,
+          "server_cpu_percent_median": 373.5934996669922,
+          "client_cpu_percent_median": 452.82138082998034,
+          "client_peak_rss_mib_max": 257.3125
+        }
+      }
+    },
+    "samples": {
+      "haskell-2": {
+        "posts": [
+          {
+            "requests": 314166,
+            "requests_per_second": 31411.172149452574,
+            "p50_seconds": 0.000609,
+            "p95_seconds": 0.004227,
+            "p99_seconds": 0.024127,
+            "peak_sampled_rss_mib": 150.8125,
+            "server_cpu_percent": 149.87410175521669,
+            "client_cpu_percent": 103.26009665529799,
+            "status_codes": {
+              "201": 314166
+            },
+            "errors": {}
+          },
+          {
+            "requests": 313903,
+            "requests_per_second": 31380.913968631983,
+            "p50_seconds": 0.000606,
+            "p95_seconds": 0.004231,
+            "p99_seconds": 0.024255,
+            "peak_sampled_rss_mib": 119.90625,
+            "server_cpu_percent": 149.55526801933544,
+            "client_cpu_percent": 102.7077701059613,
+            "status_codes": {
+              "201": 313903
+            },
+            "errors": {}
+          },
+          {
+            "requests": 300836,
+            "requests_per_second": 30078.179911979863,
+            "p50_seconds": 0.000618,
+            "p95_seconds": 0.004595,
+            "p99_seconds": 0.024351,
+            "peak_sampled_rss_mib": 114.359375,
+            "server_cpu_percent": 146.67356942279002,
+            "client_cpu_percent": 101.40006770779905,
+            "status_codes": {
+              "201": 300836
+            },
+            "errors": {}
+          },
+          {
+            "requests": 311990,
+            "requests_per_second": 31192.98287360368,
+            "p50_seconds": 0.000609,
+            "p95_seconds": 0.004207,
+            "p99_seconds": 0.024239,
+            "peak_sampled_rss_mib": 127.28125,
+            "server_cpu_percent": 147.87147559235822,
+            "client_cpu_percent": 98.00288524343652,
+            "status_codes": {
+              "201": 311990
+            },
+            "errors": {}
+          }
+        ],
+        "echo": [
+          {
+            "requests": 2440416,
+            "requests_per_second": 244018.22305423138,
+            "p50_seconds": 0.000178,
+            "p95_seconds": 0.000352,
+            "p99_seconds": 0.000541,
+            "peak_sampled_rss_mib": 153.703125,
+            "server_cpu_percent": 194.28138784304463,
+            "client_cpu_percent": 440.00311770132424,
+            "status_codes": {
+              "200": 2440416
+            },
+            "errors": {}
+          },
+          {
+            "requests": 2439118,
+            "requests_per_second": 243866.85533856112,
+            "p50_seconds": 0.000179,
+            "p95_seconds": 0.000352,
+            "p99_seconds": 0.000543,
+            "peak_sampled_rss_mib": 137.328125,
+            "server_cpu_percent": 194.0642339616809,
+            "client_cpu_percent": 437.40075704047746,
+            "status_codes": {
+              "200": 2439118
+            },
+            "errors": {}
+          },
+          {
+            "requests": 2432139,
+            "requests_per_second": 243159.48090817276,
+            "p50_seconds": 0.000179,
+            "p95_seconds": 0.000351,
+            "p99_seconds": 0.000546,
+            "peak_sampled_rss_mib": 137.1875,
+            "server_cpu_percent": 194.05657013960277,
+            "client_cpu_percent": 437.10376617712956,
+            "status_codes": {
+              "200": 2432139
+            },
+            "errors": {}
+          },
+          {
+            "requests": 2454546,
+            "requests_per_second": 245447.94836059943,
+            "p50_seconds": 0.000177,
+            "p95_seconds": 0.000348,
+            "p99_seconds": 0.000538,
+            "peak_sampled_rss_mib": 137.6875,
+            "server_cpu_percent": 194.19473732261855,
+            "client_cpu_percent": 441.0181584079071,
+            "status_codes": {
+              "200": 2454546
+            },
+            "errors": {}
+          }
+        ]
+      },
+      "haskell-4": {
+        "posts": [
+          {
+            "requests": 290414,
+            "requests_per_second": 29033.3403447203,
+            "p50_seconds": 0.000995,
+            "p95_seconds": 0.004671,
+            "p99_seconds": 0.022399,
+            "peak_sampled_rss_mib": 99.90625,
+            "server_cpu_percent": 175.15137797747343,
+            "client_cpu_percent": 112.53255096385244,
+            "status_codes": {
+              "201": 290414
+            },
+            "errors": {}
+          },
+          {
+            "requests": 296065,
+            "requests_per_second": 29601.680846358213,
+            "p50_seconds": 0.00099,
+            "p95_seconds": 0.004479,
+            "p99_seconds": 0.022527,
+            "peak_sampled_rss_mib": 101.15625,
+            "server_cpu_percent": 176.2713030318664,
+            "client_cpu_percent": 112.41285918652441,
+            "status_codes": {
+              "201": 296065
+            },
+            "errors": {}
+          },
+          {
+            "requests": 295948,
+            "requests_per_second": 29605.25657662286,
+            "p50_seconds": 0.000986,
+            "p95_seconds": 0.004519,
+            "p99_seconds": 0.022495,
+            "peak_sampled_rss_mib": 99.171875,
+            "server_cpu_percent": 177.26260915355303,
+            "client_cpu_percent": 113.55100621539526,
+            "status_codes": {
+              "201": 295948
+            },
+            "errors": {}
+          },
+          {
+            "requests": 292264,
+            "requests_per_second": 29224.754646313413,
+            "p50_seconds": 0.000997,
+            "p95_seconds": 0.004579,
+            "p99_seconds": 0.022495,
+            "peak_sampled_rss_mib": 99.5,
+            "server_cpu_percent": 174.99014805466453,
+            "client_cpu_percent": 112.56650250590891,
+            "status_codes": {
+              "201": 292264
+            },
+            "errors": {}
+          }
+        ],
+        "echo": [
+          {
+            "requests": 3038977,
+            "requests_per_second": 303870.0174414111,
+            "p50_seconds": 0.000113,
+            "p95_seconds": 0.000362,
+            "p99_seconds": 0.000613,
+            "peak_sampled_rss_mib": 101.265625,
+            "server_cpu_percent": 373.0660136861532,
+            "client_cpu_percent": 451.8343278927289,
+            "status_codes": {
+              "200": 3038977
+            },
+            "errors": {}
+          },
+          {
+            "requests": 3052136,
+            "requests_per_second": 305149.1524989922,
+            "p50_seconds": 0.000113,
+            "p95_seconds": 0.000361,
+            "p99_seconds": 0.000609,
+            "peak_sampled_rss_mib": 103.046875,
+            "server_cpu_percent": 374.12098564783116,
+            "client_cpu_percent": 453.59627046767724,
+            "status_codes": {
+              "200": 3052136
+            },
+            "errors": {}
+          },
+          {
+            "requests": 3043707,
+            "requests_per_second": 304382.99707308173,
+            "p50_seconds": 0.000113,
+            "p95_seconds": 0.000362,
+            "p99_seconds": 0.000609,
+            "peak_sampled_rss_mib": 101.1875,
+            "server_cpu_percent": 374.8151425317583,
+            "client_cpu_percent": 454.37752685208477,
+            "status_codes": {
+              "200": 3043707
+            },
+            "errors": {}
+          },
+          {
+            "requests": 3028669,
+            "requests_per_second": 302843.3993522103,
+            "p50_seconds": 0.000114,
+            "p95_seconds": 0.000361,
+            "p99_seconds": 0.000601,
+            "peak_sampled_rss_mib": 101.3125,
+            "server_cpu_percent": 372.6710807241358,
+            "client_cpu_percent": 452.04649119228344,
+            "status_codes": {
+              "200": 3028669
+            },
+            "errors": {}
+          }
+        ]
+      }
+    },
+    "verification": {
+      "haskell-2": [
+        {
+          "integrity": [
+            [
+              "ok"
+            ]
+          ],
+          "foreign_keys": [],
+          "posts": 314166,
+          "users": 65013,
+          "user_sequence": 314166,
+          "post_sequence": 314166,
+          "completed_post_responses": 314166,
+          "invalid_content_or_users": 0
+        },
+        {
+          "integrity": [
+            [
+              "ok"
+            ]
+          ],
+          "foreign_keys": [],
+          "posts": 313903,
+          "users": 65011,
+          "user_sequence": 313903,
+          "post_sequence": 313903,
+          "completed_post_responses": 313903,
+          "invalid_content_or_users": 0
+        },
+        {
+          "integrity": [
+            [
+              "ok"
+            ]
+          ],
+          "foreign_keys": [],
+          "posts": 300836,
+          "users": 64883,
+          "user_sequence": 300836,
+          "post_sequence": 300836,
+          "completed_post_responses": 300836,
+          "invalid_content_or_users": 0
+        },
+        {
+          "integrity": [
+            [
+              "ok"
+            ]
+          ],
+          "foreign_keys": [],
+          "posts": 311990,
+          "users": 64994,
+          "user_sequence": 311990,
+          "post_sequence": 311990,
+          "completed_post_responses": 311990,
+          "invalid_content_or_users": 0
+        }
+      ],
+      "haskell-4": [
+        {
+          "integrity": [
+            [
+              "ok"
+            ]
+          ],
+          "foreign_keys": [],
+          "posts": 290414,
+          "users": 64773,
+          "user_sequence": 290414,
+          "post_sequence": 290414,
+          "completed_post_responses": 290414,
+          "invalid_content_or_users": 0
+        },
+        {
+          "integrity": [
+            [
+              "ok"
+            ]
+          ],
+          "foreign_keys": [],
+          "posts": 296065,
+          "users": 64846,
+          "user_sequence": 296065,
+          "post_sequence": 296065,
+          "completed_post_responses": 296065,
+          "invalid_content_or_users": 0
+        },
+        {
+          "integrity": [
+            [
+              "ok"
+            ]
+          ],
+          "foreign_keys": [],
+          "posts": 295948,
+          "users": 64848,
+          "user_sequence": 295948,
+          "post_sequence": 295948,
+          "completed_post_responses": 295948,
+          "invalid_content_or_users": 0
+        },
+        {
+          "integrity": [
+            [
+              "ok"
+            ]
+          ],
+          "foreign_keys": [],
+          "posts": 292264,
+          "users": 64791,
+          "user_sequence": 292264,
+          "post_sequence": 292264,
+          "completed_post_responses": 292264,
+          "invalid_content_or_users": 0
+        }
+      ]
+    }
+  },
+  "startup": {
+    "raw_report": "results/haskell-multicore-startup-2026-09-22/summary.json",
+    "summary": {
+      "2": {
+        "median_ms": 13.748,
+        "min_ms": 13.377708,
+        "max_ms": 13.873584
+      },
+      "4": {
+        "median_ms": 14.749458,
+        "min_ms": 13.782583,
+        "max_ms": 15.270792
+      }
+    },
+    "samples_ms": {
+      "2": [
+        13.748,
+        13.4735,
+        13.873,
+        13.377708,
+        13.873584
+      ],
+      "4": [
+        13.782583,
+        14.506167,
+        14.973875,
+        15.270792,
+        14.749458
+      ]
+    },
+    "readiness": "all echo checks passed",
+    "method": "Fresh migrated databases/processes, alternating order; no cache flush; first post-bind log; untimed echo readiness check"
+  },
+  "build": {
+    "raw_report": "results/haskell-multicore-build-2026-09-22/summary.json",
+    "runs": [
+      {
+        "label": "clean-1",
+        "seconds": 6.857198833,
+        "command": [
+          "cabal",
+          "build",
+          "exe:haskell-benchmark",
+          "--offline",
+          "--builddir=release-1",
+          "--flags=-comparisons -dev",
+          "--enable-optimization=2"
+        ],
+        "sha256": "48d401671525b40f21c6da7dde399071fa5f344a202d2d2385c652f5e21aa805",
+        "bytes": 41155136
+      },
+      {
+        "label": "clean-2",
+        "seconds": 6.786492209,
+        "command": [
+          "cabal",
+          "build",
+          "exe:haskell-benchmark",
+          "--offline",
+          "--builddir=release-2",
+          "--flags=-comparisons -dev",
+          "--enable-optimization=2"
+        ],
+        "sha256": "48d401671525b40f21c6da7dde399071fa5f344a202d2d2385c652f5e21aa805",
+        "bytes": 41155136
+      },
+      {
+        "label": "clean-3",
+        "seconds": 6.7487742090000005,
+        "command": [
+          "cabal",
+          "build",
+          "exe:haskell-benchmark",
+          "--offline",
+          "--builddir=release-3",
+          "--flags=-comparisons -dev",
+          "--enable-optimization=2"
+        ],
+        "sha256": "48d401671525b40f21c6da7dde399071fa5f344a202d2d2385c652f5e21aa805",
+        "bytes": 41155136
+      },
+      {
+        "label": "debug-warmup",
+        "seconds": 5.864267333000001,
+        "command": [
+          "cabal",
+          "build",
+          "exe:haskell-benchmark",
+          "--offline",
+          "--builddir=debug",
+          "--flags=-comparisons dev",
+          "--disable-optimization"
+        ],
+        "sha256": "54d70c0112f01ac8ee216880cf5039e673c089a93b738ac2e2f450d7fc650835",
+        "bytes": 64406944
+      },
+      {
+        "label": "debug-no-change",
+        "seconds": 0.09641883300000131,
+        "command": [
+          "cabal",
+          "build",
+          "exe:haskell-benchmark",
+          "--offline",
+          "--builddir=debug",
+          "--flags=-comparisons dev",
+          "--disable-optimization"
+        ],
+        "sha256": "54d70c0112f01ac8ee216880cf5039e673c089a93b738ac2e2f450d7fc650835",
+        "bytes": 64406944
+      },
+      {
+        "label": "debug-edit-1",
+        "seconds": 2.802408500000002,
+        "command": [
+          "cabal",
+          "build",
+          "exe:haskell-benchmark",
+          "--offline",
+          "--builddir=debug",
+          "--flags=-comparisons dev",
+          "--disable-optimization"
+        ],
+        "sha256": "f953d644125a5a23ee47862aea3fa95cadc63dfc523f87e79eaac12b84dbad25",
+        "bytes": 64407040
+      },
+      {
+        "label": "debug-edit-2",
+        "seconds": 2.7822123749999967,
+        "command": [
+          "cabal",
+          "build",
+          "exe:haskell-benchmark",
+          "--offline",
+          "--builddir=debug",
+          "--flags=-comparisons dev",
+          "--disable-optimization"
+        ],
+        "sha256": "a8caa974939c25f48c7202b735d3e3e82e8534f7fbc808d71ef3df02d73a06b7",
+        "bytes": 64407040
+      },
+      {
+        "label": "debug-edit-3",
+        "seconds": 2.776542292000002,
+        "command": [
+          "cabal",
+          "build",
+          "exe:haskell-benchmark",
+          "--offline",
+          "--builddir=debug",
+          "--flags=-comparisons dev",
+          "--disable-optimization"
+        ],
+        "sha256": "d2ca6d1eaa8f2c0004d3c1443632cb4f957c8d881355225325807e244b5a0984",
+        "bytes": 64407040
+      }
+    ],
+    "clean_median_seconds": 6.786492209,
+    "debug_median_seconds": 2.7822123749999967,
+    "clean_definition": "Fresh Cabal build directory; compile application Haskell and C shim, link, strip and sign. Compiler, optimized dependencies and shared SQLite stay cached.",
+    "debug_definition": "Cabal -O0 incremental build after renaming public NewPost type/constructor and all consumers across modules. Warm dependencies; no-change control excluded; executable hash must change.",
+    "excludes": "pkgx environment resolution, compiler/dependency downloads/builds, SQLite engine build, copying/edits, tests and startup"
+  },
+  "artifact": {
+    "artifacts": {
+      "haskell/bin/haskell-benchmark": {
+        "bytes": 41155136,
+        "mib": 39.24859619140625,
+        "sha256": "34569fa52c957aa125e8fe48f7f41b3246703dd0739330a52055cd31ddd94d45"
+      },
+      "haskell/.tools/sqlite/lib/libsqlite3.dylib": {
+        "bytes": 1697632,
+        "mib": 1.618988037109375,
+        "sha256": "e3913b9299b1769a728fbd17a9c552dd9e42d442f718d1dcc3093ed2759b9057"
+      }
+    },
+    "combined_bytes": 42852768,
+    "linkage": "haskell/bin/haskell-benchmark:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n\t@rpath/libsqlite3.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)\n\t/usr/lib/libffi.dylib (compatibility version 1.0.0, current version 40.0.0)\n\t/System/Library/Frameworks/Security.framework/Versions/A/Security (compatibility version 1.0.0, current version 61901.120.67)\n\t/usr/lib/libcharset.1.dylib (compatibility version 1.0.0, current version 1.0.0)\n"
+  },
+  "source_sha256": {
+    "haskell/src/Codec.hs": "92b45e51b89a150e7d614050b4f8c6b3492d93f0f527033d179221416661486c",
+    "haskell/src/Model.hs": "0f10786e82c578f2922b572f4ba413ebc021626bb88da9baef6504d1b3e9f671",
+    "haskell/src/Store.hs": "ce649f31a5f007b5605783404a22fcc832a17353ae6b7ade63ff526c4838aa60",
+    "haskell/app/Main.hs": "cc46158cefae88b4e188bcc66b5bf0379ccf05ffa5302958ef8c901197547304",
+    "haskell/cbits/sqlite_config.c": "38a4d28f5b530611c7d2c34f5c05a3b9e305a9530c818bc37dbf793d72f6c2b0",
+    "haskell/http-benchmark.cabal": "139fd4f22c4d760e4d944351de5ffc736f74b100b7db3a7aa68fb0b6156a3e85",
+    "haskell/cabal.project": "fbc5055ce9c30662c07ec8af1e6bb1fb0690448818a3caf7c02da88ad0ea2ccc",
+    "haskell/cabal.project.freeze": "af4a0d57688d2f6d62c43650ab1f13c2759de54c3e85cb662c05d80c30da9661",
+    "haskell/toolchain.sh": "7b244444e80fbbeb70d9a9657295afa9213bb5c6bc4b692b9a6c0a2e543bb282",
+    "haskell/build.py": "b7db21195159b25a59b44d0f6c17810dd1403596d96b844c3ae17c7222b487dd"
+  },
+  "loadgen_source_sha256": {
+    "loadgen/go.mod": "9c28127e53777c5b0d203f491f0c3ed027048213e67391dfd8ca552cb5a7288b",
+    "loadgen/go.sum": "7eb92259c1e41330b27f682d971bd4d5eb57cffe696f77f3d0e64687d649ff54",
+    "loadgen/host.py": "2f01bd43eca2c8d3fd4d33df9dd4880957badb5fce3592109145a8f1c3feeb71",
+    "loadgen/main.go": "aef5d5a567edcdb4ffb442ea3055310944532997e7d1589a947c37e3c7809f35",
+    "loadgen/measure.py": "f463767eb370e46f7777dc3eaa6a9455d3fa9ec3d50560fa56b62dc8d4d02a91",
+    "loadgen/run.py": "f81d215ed792da5fd943b87480441b9cc4a872f33ac8e132fccf9e843295b07c",
+    "loadgen/test-servers.py": "2ce57509369c8557cf736d940f10e04971d2c303eb47fb4ac85c962acebdc9d4",
+    "loadgen/test.py": "56e35ee2c8ee507f7f83c2dd36210b4be329e56bb9d742c1485b0cdf4ba6184f",
+    "loadgen/workload.py": "e034af2e0a2ce2222658b5f05d24be75642287f5b568634a2efc588ded314098"
+  },
+  "artifact_sha256": {
+    ".tools/random-json-v1.jsonl": "6ceceb17e1eff0831fcee960f99403185f7cb83408f7cb3a13dd0db09acc0945",
+    "haskell/bin/haskell-benchmark": "34569fa52c957aa125e8fe48f7f41b3246703dd0739330a52055cd31ddd94d45",
+    "loadgen/bombard": "154372c82daff01cc0c63149254c888f06eb4d5033aff4f5ce82596aa5f1d4f5",
+    "haskell/.tools/sqlite/lib/libsqlite3.dylib.build.json": "729ef741cb4e239ffbc5cc2ededf086dd780e09aafcc9888ad317a88f0d8f21b",
+    "haskell/.tools/sqlite/lib/libsqlite3.dylib": "e3913b9299b1769a728fbd17a9c552dd9e42d442f718d1dcc3093ed2759b9057"
+  },
+  "diagnostics": {
+    "timer": {
+      "raw_report": "results/haskell-timer-2026-09-22/summary.json",
+      "rounds": 1,
+      "duration": "3s",
+      "summary": {
+        "haskell-timer-old-1": {
+          "posts": {
+            "rps_median": 15125.133154916568,
+            "p50_ms_median": 2.659,
+            "p99_ms_median": 7.875,
+            "peak_rss_mib_max": 57.90625,
+            "server_cpu_percent_median": 113.88304211574713
+          },
+          "echo": {
+            "rps_median": 97080.01719008706,
+            "p50_ms_median": 0.47100000000000003,
+            "p99_ms_median": 0.98,
+            "peak_rss_mib_max": 170.765625,
+            "server_cpu_percent_median": 98.60980168103059
+          }
+        },
+        "haskell-timer-new-1": {
+          "posts": {
+            "rps_median": 15244.300281490596,
+            "p50_ms_median": 2.6470000000000002,
+            "p99_ms_median": 7.655,
+            "peak_rss_mib_max": 58.296875,
+            "server_cpu_percent_median": 114.18078780083142
+          },
+          "echo": {
+            "rps_median": 143507.32996379404,
+            "p50_ms_median": 0.318,
+            "p99_ms_median": 0.631,
+            "peak_rss_mib_max": 218.921875,
+            "server_cpu_percent_median": 99.60049873534015
+          }
+        },
+        "haskell-timer-old-2": {
+          "posts": {
+            "rps_median": 15652.431773475739,
+            "p50_ms_median": 2.569,
+            "p99_ms_median": 7.667,
+            "peak_rss_mib_max": 71.828125,
+            "server_cpu_percent_median": 133.64223972425816
+          },
+          "echo": {
+            "rps_median": 36812.22106717836,
+            "p50_ms_median": 1.331,
+            "p99_ms_median": 1.944,
+            "peak_rss_mib_max": 88.390625,
+            "server_cpu_percent_median": 112.24761357243518
+          }
+        },
+        "haskell-timer-new-2": {
+          "posts": {
+            "rps_median": 15653.743743280467,
+            "p50_ms_median": 2.569,
+            "p99_ms_median": 7.595,
+            "peak_rss_mib_max": 71.703125,
+            "server_cpu_percent_median": 133.51663847057188
+          },
+          "echo": {
+            "rps_median": 238110.80214644928,
+            "p50_ms_median": 0.183,
+            "p99_ms_median": 0.553,
+            "peak_rss_mib_max": 117.171875,
+            "server_cpu_percent_median": 193.90808756649352
+          }
+        },
+        "haskell-timer-old-4": {
+          "posts": {
+            "rps_median": 17883.371084860373,
+            "p50_ms_median": 2.179,
+            "p99_ms_median": 7.407,
+            "peak_rss_mib_max": 80.421875,
+            "server_cpu_percent_median": 154.135423449624
+          },
+          "echo": {
+            "rps_median": 24156.544715054762,
+            "p50_ms_median": 2.057,
+            "p99_ms_median": 2.771,
+            "peak_rss_mib_max": 81.796875,
+            "server_cpu_percent_median": 134.1420021243034
+          }
+        },
+        "haskell-timer-new-4": {
+          "posts": {
+            "rps_median": 18007.41993206054,
+            "p50_ms_median": 2.177,
+            "p99_ms_median": 7.2989999999999995,
+            "peak_rss_mib_max": 79.578125,
+            "server_cpu_percent_median": 152.50084741191412
+          },
+          "echo": {
+            "rps_median": 298722.25814909843,
+            "p50_ms_median": 0.11299999999999999,
+            "p99_ms_median": 0.623,
+            "peak_rss_mib_max": 81.328125,
+            "server_cpu_percent_median": 374.4835442135463
+          }
+        },
+        "haskell-timer-old-8": {
+          "posts": {
+            "rps_median": 19389.859451157885,
+            "p50_ms_median": 1.9559999999999997,
+            "p99_ms_median": 6.559,
+            "peak_rss_mib_max": 118.875,
+            "server_cpu_percent_median": 174.82441800951244
+          },
+          "echo": {
+            "rps_median": 16136.566746541546,
+            "p50_ms_median": 2.971,
+            "p99_ms_median": 7.034999999999999,
+            "peak_rss_mib_max": 119.9375,
+            "server_cpu_percent_median": 166.02706873387558
+          }
+        },
+        "haskell-timer-new-8": {
+          "posts": {
+            "rps_median": 19376.559167238473,
+            "p50_ms_median": 1.967,
+            "p99_ms_median": 6.651,
+            "peak_rss_mib_max": 117.578125,
+            "server_cpu_percent_median": 170.54430561539567
+          },
+          "echo": {
+            "rps_median": 214958.92209882537,
+            "p50_ms_median": 0.127,
+            "p99_ms_median": 1.415,
+            "peak_rss_mib_max": 125.734375,
+            "server_cpu_percent_median": 497.7827855724902
+          }
+        }
+      },
+      "artifact_sha256": {
+        ".tools/random-json-v1.jsonl": "6ceceb17e1eff0831fcee960f99403185f7cb83408f7cb3a13dd0db09acc0945",
+        "haskell/bin/haskell-benchmark": "6cf88c956c8ac3af9bdbc56ec9c97806f37154c2a02861b1e3ffe5edfa159857",
+        "haskell/bin/haskell-new-timer": "a000e13a947e91006f3052d0d4cff5af1f18b67f892ba29bce1b57230daab750",
+        "loadgen/bombard": "154372c82daff01cc0c63149254c888f06eb4d5033aff4f5ce82596aa5f1d4f5",
+        "haskell/.tools/sqlite/lib/libsqlite3.dylib.build.json": "729ef741cb4e239ffbc5cc2ededf086dd780e09aafcc9888ad317a88f0d8f21b",
+        "haskell/.tools/sqlite/lib/libsqlite3.dylib": "e3913b9299b1769a728fbd17a9c552dd9e42d442f718d1dcc3093ed2759b9057"
+      }
+    },
+    "writer": {
+      "raw_report": "results/haskell-writer-fixed-timer-2026-09-22/summary.json",
+      "rounds": 1,
+      "duration": "3s",
+      "summary": {
+        "haskell-writer-bound-safe-2": {
+          "posts": {
+            "rps_median": 13941.382822224738,
+            "p50_ms_median": 2.9650000000000003,
+            "p99_ms_median": 8.231,
+            "peak_rss_mib_max": 69.46875,
+            "server_cpu_percent_median": 127.13923410260337
+          },
+          "echo": {
+            "rps_median": 241778.81424151803,
+            "p50_ms_median": 0.18100000000000002,
+            "p99_ms_median": 0.5419999999999999,
+            "peak_rss_mib_max": 117.796875,
+            "server_cpu_percent_median": 194.50347824841623
+          }
+        },
+        "haskell-writer-bound-hybrid-2": {
+          "posts": {
+            "rps_median": 15552.89813591003,
+            "p50_ms_median": 2.577,
+            "p99_ms_median": 7.803,
+            "peak_rss_mib_max": 71.71875,
+            "server_cpu_percent_median": 133.20399225685193
+          },
+          "echo": {
+            "rps_median": 244405.19257573228,
+            "p50_ms_median": 0.179,
+            "p99_ms_median": 0.539,
+            "peak_rss_mib_max": 120.203125,
+            "server_cpu_percent_median": 194.59330499068517
+          }
+        },
+        "haskell-writer-bound-no-callback-2": {
+          "posts": {
+            "rps_median": 24524.85262083061,
+            "p50_ms_median": 0.696,
+            "p99_ms_median": 28.815,
+            "peak_rss_mib_max": 82.0625,
+            "server_cpu_percent_median": 135.50194147314915
+          },
+          "echo": {
+            "rps_median": 237039.61878321046,
+            "p50_ms_median": 0.183,
+            "p99_ms_median": 0.5670000000000001,
+            "peak_rss_mib_max": 119.78125,
+            "server_cpu_percent_median": 193.92714803472165
+          }
+        },
+        "haskell-writer-unbound-safe-2": {
+          "posts": {
+            "rps_median": 13968.746188975001,
+            "p50_ms_median": 2.937,
+            "p99_ms_median": 7.995,
+            "peak_rss_mib_max": 70.53125,
+            "server_cpu_percent_median": 126.60495035324774
+          },
+          "echo": {
+            "rps_median": 238340.52053725612,
+            "p50_ms_median": 0.185,
+            "p99_ms_median": 0.533,
+            "peak_rss_mib_max": 122.390625,
+            "server_cpu_percent_median": 194.90910738625553
+          }
+        },
+        "haskell-writer-unbound-hybrid-2": {
+          "posts": {
+            "rps_median": 15685.68191410187,
+            "p50_ms_median": 2.561,
+            "p99_ms_median": 7.759,
+            "peak_rss_mib_max": 71.78125,
+            "server_cpu_percent_median": 133.4710870337998
+          },
+          "echo": {
+            "rps_median": 236581.97568636984,
+            "p50_ms_median": 0.185,
+            "p99_ms_median": 0.555,
+            "peak_rss_mib_max": 120.359375,
+            "server_cpu_percent_median": 194.42913906843808
+          }
+        },
+        "haskell-writer-unbound-no-callback-2": {
+          "posts": {
+            "rps_median": 24538.800214276005,
+            "p50_ms_median": 0.699,
+            "p99_ms_median": 27.183,
+            "peak_rss_mib_max": 82.359375,
+            "server_cpu_percent_median": 135.58820629129278
+          },
+          "echo": {
+            "rps_median": 239049.64467637677,
+            "p50_ms_median": 0.18100000000000002,
+            "p99_ms_median": 0.5670000000000001,
+            "peak_rss_mib_max": 124.125,
+            "server_cpu_percent_median": 193.5978103787753
+          }
+        },
+        "haskell-writer-bound-safe-4": {
+          "posts": {
+            "rps_median": 16737.66819503381,
+            "p50_ms_median": 2.359,
+            "p99_ms_median": 7.699,
+            "peak_rss_mib_max": 80.953125,
+            "server_cpu_percent_median": 147.18678435837384
+          },
+          "echo": {
+            "rps_median": 269224.9898129752,
+            "p50_ms_median": 0.114,
+            "p99_ms_median": 0.894,
+            "peak_rss_mib_max": 82.765625,
+            "server_cpu_percent_median": 338.84559935522714
+          }
+        },
+        "haskell-writer-bound-hybrid-4": {
+          "posts": {
+            "rps_median": 17623.87374263244,
+            "p50_ms_median": 2.2169999999999996,
+            "p99_ms_median": 7.239,
+            "peak_rss_mib_max": 80.609375,
+            "server_cpu_percent_median": 151.17213344836622
+          },
+          "echo": {
+            "rps_median": 294965.29095540754,
+            "p50_ms_median": 0.11299999999999999,
+            "p99_ms_median": 0.651,
+            "peak_rss_mib_max": 82.890625,
+            "server_cpu_percent_median": 372.85756707774215
+          }
+        },
+        "haskell-writer-bound-no-callback-4": {
+          "posts": {
+            "rps_median": 23808.26323214988,
+            "p50_ms_median": 1.103,
+            "p99_ms_median": 24.927,
+            "peak_rss_mib_max": 78.984375,
+            "server_cpu_percent_median": 153.83800857696846
+          },
+          "echo": {
+            "rps_median": 296132.810638395,
+            "p50_ms_median": 0.114,
+            "p99_ms_median": 0.634,
+            "peak_rss_mib_max": 80.859375,
+            "server_cpu_percent_median": 372.591775719747
+          }
+        },
+        "haskell-writer-unbound-safe-4": {
+          "posts": {
+            "rps_median": 16756.905374845137,
+            "p50_ms_median": 2.3609999999999998,
+            "p99_ms_median": 7.571,
+            "peak_rss_mib_max": 82.03125,
+            "server_cpu_percent_median": 146.45898782193518
+          },
+          "echo": {
+            "rps_median": 294917.97091900615,
+            "p50_ms_median": 0.114,
+            "p99_ms_median": 0.637,
+            "peak_rss_mib_max": 84.140625,
+            "server_cpu_percent_median": 371.0653004979403
+          }
+        },
+        "haskell-writer-unbound-hybrid-4": {
+          "posts": {
+            "rps_median": 17709.901603889233,
+            "p50_ms_median": 2.2030000000000003,
+            "p99_ms_median": 7.403,
+            "peak_rss_mib_max": 79.34375,
+            "server_cpu_percent_median": 152.81794289070288
+          },
+          "echo": {
+            "rps_median": 298951.6586496905,
+            "p50_ms_median": 0.11299999999999999,
+            "p99_ms_median": 0.618,
+            "peak_rss_mib_max": 81.484375,
+            "server_cpu_percent_median": 376.7273749563233
+          }
+        },
+        "haskell-writer-unbound-no-callback-4": {
+          "posts": {
+            "rps_median": 22829.293872714814,
+            "p50_ms_median": 1.123,
+            "p99_ms_median": 25.311,
+            "peak_rss_mib_max": 79.515625,
+            "server_cpu_percent_median": 150.39630424373783
+          },
+          "echo": {
+            "rps_median": 297325.98584698216,
+            "p50_ms_median": 0.11299999999999999,
+            "p99_ms_median": 0.621,
+            "peak_rss_mib_max": 81.6875,
+            "server_cpu_percent_median": 375.48142916161356
+          }
+        }
+      },
+      "artifact_sha256": {
+        ".tools/random-json-v1.jsonl": "6ceceb17e1eff0831fcee960f99403185f7cb83408f7cb3a13dd0db09acc0945",
+        "haskell/bin/haskell-benchmark": "3ad11a9c80867b8df4ce08edb9f20283fbf56a2ac96d4963d2ff31d3705f97be",
+        "loadgen/bombard": "154372c82daff01cc0c63149254c888f06eb4d5033aff4f5ce82596aa5f1d4f5",
+        "haskell/.tools/sqlite/lib/libsqlite3.dylib.build.json": "729ef741cb4e239ffbc5cc2ededf086dd780e09aafcc9888ad317a88f0d8f21b",
+        "haskell/.tools/sqlite/lib/libsqlite3.dylib": "e3913b9299b1769a728fbd17a9c552dd9e42d442f718d1dcc3093ed2759b9057"
+      }
+    },
+    "libraries": {
+      "raw_report": "results/haskell-selection-2026-09-22/summary.json",
+      "rounds": 3,
+      "duration": "3s",
+      "summary": {
+        "haskell-2": {
+          "posts": {
+            "rps_median": 13905.863901670074,
+            "p50_ms_median": 2.977,
+            "p99_ms_median": 8.147,
+            "peak_rss_mib_max": 70.90625,
+            "server_cpu_percent_median": 131.81857370306005
+          },
+          "echo": {
+            "rps_median": 26226.892059863105,
+            "p50_ms_median": 1.881,
+            "p99_ms_median": 2.539,
+            "peak_rss_mib_max": 80.5625,
+            "server_cpu_percent_median": 111.49158771009924
+          }
+        },
+        "haskell-aeson": {
+          "posts": {
+            "rps_median": 13465.91217350813,
+            "p50_ms_median": 3.021,
+            "p99_ms_median": 8.311,
+            "peak_rss_mib_max": 76.203125,
+            "server_cpu_percent_median": 132.15989549714257
+          },
+          "echo": {
+            "rps_median": 25995.860321824017,
+            "p50_ms_median": 1.905,
+            "p99_ms_median": 2.6189999999999998,
+            "peak_rss_mib_max": 96.78125,
+            "server_cpu_percent_median": 112.21617964178729
+          }
+        },
+        "haskell-snap": {
+          "posts": {
+            "rps_median": 10503.77879847018,
+            "p50_ms_median": 4.114999999999999,
+            "p99_ms_median": 9.254999999999999,
+            "peak_rss_mib_max": 108.546875,
+            "server_cpu_percent_median": 141.7361345628222
+          },
+          "echo": {
+            "rps_median": 48250.64804686915,
+            "p50_ms_median": 1.002,
+            "p99_ms_median": 1.573,
+            "peak_rss_mib_max": 205.96875,
+            "server_cpu_percent_median": 192.19501698610898
+          }
+        }
+      },
+      "artifact_sha256": {
+        ".tools/random-json-v1.jsonl": "6ceceb17e1eff0831fcee960f99403185f7cb83408f7cb3a13dd0db09acc0945",
+        "haskell/bin/haskell-benchmark": "849a6d0dea684dfb74ffedfe1142dc72191f5c2bfe726170d6122cf68ab0f2f1",
+        "loadgen/bombard": "154372c82daff01cc0c63149254c888f06eb4d5033aff4f5ce82596aa5f1d4f5",
+        "haskell/.tools/sqlite/lib/libsqlite3.dylib.build.json": "729ef741cb4e239ffbc5cc2ededf086dd780e09aafcc9888ad317a88f0d8f21b",
+        "haskell/.tools/sqlite/lib/libsqlite3.dylib": "e3913b9299b1769a728fbd17a9c552dd9e42d442f718d1dcc3093ed2759b9057"
+      }
+    },
+    "heap_before_timer_fix": {
+      "raw_report": "results/haskell-heap-2026-09-22/summary.json",
+      "rounds": 2,
+      "duration": "5s",
+      "summary": {
+        "haskell-heap-default": {
+          "posts": {
+            "rps_median": 19412.984588114607,
+            "p50_ms_median": 1.901,
+            "p99_ms_median": 7.179,
+            "peak_rss_mib_max": 81.828125,
+            "server_cpu_percent_median": 85.14758490108477
+          },
+          "echo": {
+            "rps_median": 99780.03868773981,
+            "p50_ms_median": 0.4585,
+            "p99_ms_median": 0.9435,
+            "peak_rss_mib_max": 198.46875,
+            "server_cpu_percent_median": 98.73718763749906
+          }
+        },
+        "haskell-heap-g1": {
+          "posts": {
+            "rps_median": 17815.497234450166,
+            "p50_ms_median": 2.1559999999999997,
+            "p99_ms_median": 7.439,
+            "peak_rss_mib_max": 36.078125,
+            "server_cpu_percent_median": 86.69186989209653
+          },
+          "echo": {
+            "rps_median": 89698.23348910204,
+            "p50_ms_median": 0.46950000000000003,
+            "p99_ms_median": 1.2654999999999998,
+            "peak_rss_mib_max": 37.3125,
+            "server_cpu_percent_median": 98.85167893838045
+          }
+        },
+        "haskell-heap-a2m": {
+          "posts": {
+            "rps_median": 19125.360048184746,
+            "p50_ms_median": 1.9535,
+            "p99_ms_median": 7.125,
+            "peak_rss_mib_max": 74.078125,
+            "server_cpu_percent_median": 85.9902259051
+          },
+          "echo": {
+            "rps_median": 93896.70411379435,
+            "p50_ms_median": 0.4925,
+            "p99_ms_median": 0.9470000000000001,
+            "peak_rss_mib_max": 208.53125,
+            "server_cpu_percent_median": 98.76077228099233
+          }
+        },
+        "haskell-heap-aeson": {
+          "posts": {
+            "rps_median": 18614.429531824713,
+            "p50_ms_median": 2.0975,
+            "p99_ms_median": 7.2989999999999995,
+            "peak_rss_mib_max": 84.25,
+            "server_cpu_percent_median": 86.3443448059089
+          },
+          "echo": {
+            "rps_median": 92279.72626634891,
+            "p50_ms_median": 0.48850000000000005,
+            "p99_ms_median": 0.977,
+            "peak_rss_mib_max": 213.4375,
+            "server_cpu_percent_median": 98.64790014218599
+          }
+        }
+      },
+      "artifact_sha256": {
+        ".tools/random-json-v1.jsonl": "6ceceb17e1eff0831fcee960f99403185f7cb83408f7cb3a13dd0db09acc0945",
+        "haskell/bin/haskell-benchmark": "6cf88c956c8ac3af9bdbc56ec9c97806f37154c2a02861b1e3ffe5edfa159857",
+        "loadgen/bombard": "154372c82daff01cc0c63149254c888f06eb4d5033aff4f5ce82596aa5f1d4f5",
+        "haskell/.tools/sqlite/lib/libsqlite3.dylib.build.json": "729ef741cb4e239ffbc5cc2ededf086dd780e09aafcc9888ad317a88f0d8f21b",
+        "haskell/.tools/sqlite/lib/libsqlite3.dylib": "e3913b9299b1769a728fbd17a9c552dd9e42d442f718d1dcc3093ed2759b9057"
+      }
+    },
+    "codec": {
+      "raw_report": "results/haskell-codecs-2026-09-22.csv",
+      "samples": {
+        "Aeson": [
+          {
+            "round": 0,
+            "ns": 1693.572998046875,
+            "checksum": 59938320
+          },
+          {
+            "round": 1,
+            "ns": 1597.9537963867188,
+            "checksum": 59938320
+          },
+          {
+            "round": 2,
+            "ns": 1585.0639343261719,
+            "checksum": 59938320
+          },
+          {
+            "round": 3,
+            "ns": 1598.3047485351562,
+            "checksum": 59938320
+          },
+          {
+            "round": 4,
+            "ns": 1609.466552734375,
+            "checksum": 59938320
+          },
+          {
+            "round": 5,
+            "ns": 1606.6436767578125,
+            "checksum": 59938320
+          }
+        ],
+        "Jsonifier": [
+          {
+            "round": 0,
+            "ns": 1353.3058166503906,
+            "checksum": 59938320
+          },
+          {
+            "round": 1,
+            "ns": 1356.2431335449219,
+            "checksum": 59938320
+          },
+          {
+            "round": 2,
+            "ns": 1356.8115234375,
+            "checksum": 59938320
+          },
+          {
+            "round": 3,
+            "ns": 1344.8867797851562,
+            "checksum": 59938320
+          },
+          {
+            "round": 4,
+            "ns": 1351.4671325683594,
+            "checksum": 59938320
+          },
+          {
+            "round": 5,
+            "ns": 1351.2115478515625,
+            "checksum": 59938320
+          }
+        ]
+      },
+      "median_ns_excluding_round_zero": {
+        "Aeson": 1598.3047485351562,
+        "Jsonifier": 1351.4671325683594
+      }
+    },
+    "profiles": {
+      "n4-posts": {
+        "raw_directory": "results/haskell-multicore-profile-2026-09-22/n4-posts",
+        "allocated_bytes": 5770532552.0,
+        "max_live_bytes": 2080928.0,
+        "gc_elapsed_seconds": 0.028,
+        "total_elapsed_seconds": 10.881
+      },
+      "n2-echo": {
+        "raw_directory": "results/haskell-multicore-profile-2026-09-22/n2-echo",
+        "allocated_bytes": 28842672128.0,
+        "max_live_bytes": 2533696.0,
+        "gc_elapsed_seconds": 0.314,
+        "total_elapsed_seconds": 10.942
+      },
+      "n2-posts": {
+        "raw_directory": "results/haskell-multicore-profile-2026-09-22/n2-posts",
+        "allocated_bytes": 5316415560.0,
+        "max_live_bytes": 2426192.0,
+        "gc_elapsed_seconds": 0.059,
+        "total_elapsed_seconds": 11.129
+      },
+      "n4-echo": {
+        "raw_directory": "results/haskell-multicore-profile-2026-09-22/n4-echo",
+        "allocated_bytes": 37178440544.0,
+        "max_live_bytes": 2040928.0,
+        "gc_elapsed_seconds": 0.229,
+        "total_elapsed_seconds": 10.851
+      }
+    }
+  }
+}

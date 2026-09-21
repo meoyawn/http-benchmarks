@@ -1,10 +1,10 @@
 # Shared SQLite benchmark configuration
 
-Go, Kotlin Panama, OCaml, Rust and C# use the same SQLite **3.53.4** amalgamation and the
+Go, Kotlin Panama, OCaml, Rust, C#, Zig and Haskell use the same SQLite **3.53.4** amalgamation and the
 configuration in [sqlite-config.json](sqlite-config.json). The selected settings
 optimize this unbatched WAL workload while retaining its transaction semantics.
 
-| Setting | All five implementations |
+| Setting | All seven implementations |
 | --- | --- |
 | C compilation | `-O3 -DNDEBUG`, same SQLite feature/optimization defines |
 | Thread safety | `SQLITE_THREADSAFE=2`; one owner and `NOMUTEX` per connection |
@@ -24,7 +24,7 @@ lose recent committed transactions. See SQLite's [compiler options](https://sqli
 and [runtime configuration](https://sqlite.org/c3ref/c_config_covering_index_scan.html).
 
 [prepare-sqlite.py](prepare-sqlite.py) verifies the archive checksum and builds
-Kotlin's bundled library and the OCaml/Rust/C# local native libraries from the same options.
+Kotlin's bundled library and the OCaml/Rust/C#/Zig/Haskell local native libraries from the same options.
 Go's pinned Tailscale driver contains exactly the same upstream amalgamation
 inside its `SQLITE_TRUNK` conditional wrapper, with the same defines already in
 its cgo directives. Go builds set `CGO_CFLAGS='-O3 -DNDEBUG'`; its tests compare
@@ -35,7 +35,7 @@ disabled. Its tests check every connection pragma and shared compile define.
 
 Memory configuration happens before opening connections. Go briefly shuts down
 the engine initialized by its imported driver, configures it, and initializes it
-again during package initialization. OCaml, Kotlin, Rust and C# configure before their
+again during package initialization. OCaml, Kotlin, Rust, C#, Zig and Haskell configure before their
 first initialization. Page pools live for the process lifetime.
 
 C# calls the same engine through .NET's generated `LibraryImport` interop.
@@ -43,3 +43,11 @@ Its three-function [C shim](../csharp/sqlite-config.c) only adapts the variadic
 `sqlite3_config` ABI on Apple ARM64; it contains no query or transaction logic.
 The engine source, compiler defines and connection settings are unchanged.
 Its HTTP tests check every reported compile define and connection pragma.
+
+Haskell links the same engine using direct-sqlite's `+systemlib` mode and a
+single writer. Its [C shim](../haskell/cbits/sqlite_config.c) adapts startup
+configuration and supplies disabled-feature compatibility symbols; all SQL and
+transactions remain in Haskell. Tests compare the full reported compile-option
+list and every connection pragma with this shared library. `stepNoCB` avoids
+Haskell callback support for these statements; it changes FFI scheduling, not
+SQLite locking, timeouts, SQL or durability.

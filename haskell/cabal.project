@@ -1,0 +1,9 @@
+packages: .
+optimization: 2
+jobs: 4
+-- http2 5.4.4 has a stale <0.4 bound; Warp supports the new timer API.
+allow-newer: http2:time-manager
+package direct-sqlite
+  flags: +systemlib
+package warp
+  flags: -x509

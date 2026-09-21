@@ -8,12 +8,14 @@
 ## Results
 
 Apple M1 Pro **10 cores (8 performance + 2 efficiency)**, 16 GiB RAM, macOS 26.4.
-The **eleven rows marked †** were remeasured on
+The **eleven Rust/Go/OCaml/C#/Kotlin JVM/Zig rows marked †** were remeasured on
 **2026-09-18** using [randomized valid JSON](loadgen/README.md) and **Vegeta 12.13.0**.
 Rust, Go and OCaml use six rotating rounds. C# JIT/AOT and Kotlin JVM retain
 the subsequent four-round sweep; the modernized Zig stack uses its own four-round
 sweep with one and four HTTP executors. Configurations rotate through order
 positions within each sweep, with fresh processes and databases.
+Haskell's **two additional † rows** use the same workload in a separate
+four-round sweep on **2026-09-22**; they were not measured alongside the older stacks.
 Each runs `/posts` for 10 seconds, then `/echo` for 10 seconds, at **50 concurrent requests**, without HTTP warm-up.
 
 The seeded corpus has **65,536 valid email/content pairs** and **32–256 Unicode
@@ -30,13 +32,14 @@ tests; normal desktop applications remain active. Separate client CPU, calibrati
 reproduction commands and isolation limits are in the [load methodology](loadgen/README.md).
 
 **Unmarked rows retain historical static-payload results and are not directly
-comparable to the randomized rows.** Zig startup, clean/debug build times and artifact size are also remeasured.
+comparable to the randomized rows.** Zig and Haskell startup, clean/debug build
+times and artifact size are also measured with their current implementations.
 The other stacks retain their prior non-HTTP measurements.
 
 Go, Kotlin, OCaml, Rust and C# use the same precompiled whole-string ASCII email rule:
 `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`, checked against
-[shared examples](testdata/email-validation.json). Content must be nonempty. Zig implements the same rule with an ASCII scanner
-and passes those same fixtures. These six language implementations use **identical SQLite 3.53.4 source and reported compile options**,
+[shared examples](testdata/email-validation.json). Content must be nonempty. Zig and Haskell implement the same rule with ASCII
+scanners and pass those same fixtures. These seven language implementations use **identical SQLite 3.53.4 source and reported compile options**,
 `-O3 -DNDEBUG`, disabled memory accounting, a preallocated page pool, and the
 same [connection settings](db/README.md): WAL, `synchronous=NORMAL`, foreign keys,
 10-second busy timeout, 2,000 KiB cache, 1,000-page automatic checkpoint,
@@ -94,22 +97,35 @@ batching HTTP wake-ups. JIT uses the installed runtime's tiering
 and dynamic PGO defaults. AOT optimizes for speed and targets the host CPU.
 Setup, library comparisons and tradeoffs: [C#](csharp/README.md).
 
+Haskell uses **pkgx GHC 9.14.1 / Cabal 3.14.2.0**, **Warp 3.4.16**,
+**Aeson 2.3.2.0 decoding / jsonifier 0.2.1.3 encoding**, and
+**direct-sqlite 2.3.29**. Two GHC capabilities (`-N2`) are the default;
+four (`-N4`) provide the echo configuration. Each keeps the same capability count
+across endpoints, with an 8 MiB allocation area per capability and one bound
+SQLite writer. HTTP connection threads are distributed across capabilities.
+Profiling exposed shared timer contention: pinning **time-manager 0.4.0** fixed
+the collapse seen with 0.3.2 and restored multicore scaling. SQLite uses the
+library's callback-free stepping API; long foreign calls can delay GHC collection.
+[Selection, profiling, tradeoffs and reproduction](haskell/README.md).
+
 ```sh
 task post
 ```
 
-Build and reproduction: [randomized load runner](loadgen/README.md). `task benchmark` reruns Rust/Go/OCaml; the load-runner documentation includes C#/Kotlin and the separate Zig sweep.
+Build and reproduction: [randomized load runner](loadgen/README.md). `task benchmark` reruns Rust/Go/OCaml; the load-runner documentation includes C#/Kotlin and the separate Zig and Haskell sweeps.
 
 ## SQLite write throughput
 
 | Framework | RPS | p50 latency | Peak RAM (RSS) | CPU utilization | Start + UDS bind | Clean release build | Warm debug rebuild | Release binary size |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | [Zig std.http/zio (`-workers 1`)](zig/) † | 31.8K | 1.201ms | 15.8 MiB | 123% | 6.09ms | 34.25s | 3.05s | 0.80 MiB |
+| [Haskell Warp (`-N2`)](haskell/) † | 31.3K | 0.609ms | 150.8 MiB | 149% | 13.75ms | 6.79s | 2.78s | 39.25 MiB |
 | [Go FastHTTP (`GOMAXPROCS=2`)](go/) † | 31.2K | 1.222ms | 24.8 MiB | 139% | 9.26ms | 19.87s | 1.03s | 7.78 MiB |
 | [C# .NET JIT](csharp/) † | 31.0K | 1.210ms | 169.0 MiB | 278% | 166.47ms | 15.83s | 0.707s | 1.81 MiB (bundle) |
 | [Rust Actix (`-workers 1`)](rust/) † | 30.8K | 1.238ms | 11.3 MiB | 130% | 12.68ms | 43.20s | 1.23s | 1.70 MiB |
 | [C# .NET AOT](csharp/) † | 30.0K | 1.232ms | 105.6 MiB | 257% | 89.28ms | 24.85s | 0.707s (JIT) | 9.19 MiB |
 | [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) † | 29.4K | 1.306ms | 37.0 MiB | 148% | 8.92ms | 1.12s | 0.521s | 4.60 MiB |
+| [Haskell Warp (`-N4`)](haskell/) † | 29.4K | 0.993ms | 101.2 MiB | 176% | 14.75ms | 6.79s | 2.78s | 39.25 MiB |
 | [Rust Actix (`-workers 3`)](rust/) † | 29.2K | 1.298ms | 12.3 MiB | 141% | 10.67ms | 43.20s | 1.23s | 1.70 MiB |
 | Kotlin Vert.x SQLite Panama (JVM) † | 28.8K | 1.259ms | 176.3 MiB | 183% | 183.04ms | 21.15s | 1.09s | 14.36 MiB (JAR) |
 | [Go FastHTTP (`GOMAXPROCS=4`)](go/) † | 28.6K | 1.372ms | 26.1 MiB | 183% | 8.82ms | 19.87s | 1.03s | 7.78 MiB |
@@ -167,6 +183,15 @@ four-executor echo ranged **366.5K–389.5K**. Startup medians are **6.09 / 5.84
 respectively. The same **0.80 MiB** release executable serves both configurations;
 clean release builds take **34.25s**, and real debug edits rebuild in **3.05s**.
 
+Haskell measures **31.3K writes/sec / 243.9K echo RPS** at `-N2`, and
+**29.4K / 304.1K** at `-N4`. Two-capability writes ranged **30.1K–31.4K**;
+four-capability echo ranged **302.8K–305.1K**. Startup takes **13.75 / 14.75ms**,
+clean application release builds **6.79s**, and debug edits rebuild in **2.78s**.
+The callback-free SQLite path improves throughput but has longer write tails:
+p99 is **24.247 / 22.495ms**. The [Haskell notes](haskell/README.md) retain
+ordinary and mixed FFI comparisons, the timer diagnosis and complete aggregates.
+These are separate September 22 measurements; historical JS results remain unchanged.
+
 Both Kotlin rows were fully remeasured after removing Jackson, staging native
 libraries at build time and adding a HotSpot class/linkage/profile cache for the
 JVM. JVM startup is **183.04ms** median across seven fresh processes
@@ -188,7 +213,8 @@ are process-start measurements, not guaranteed cold-cache startup.
 [Go script](go/measure-startup.py), [Kotlin startup script](kotlin/measure-startup.py), [OCaml script](ocaml/measure-startup.py),
 [Rust script](rust/measure-startup.py),
 [Kotlin GraalVM startup script](kotlin/measure-startup.py),
-[C# script](csharp/measure.py), [Zig script](zig/measure-startup.py). Rust also includes HTTP worker setup. C# launches
+[C# script](csharp/measure.py), [Zig script](zig/measure-startup.py),
+[Haskell script](haskell/measure-startup.py). Rust also includes HTTP worker setup. C# launches
 the built apphost directly after resolving the runtime through `pkgx dotnet`;
 pkgx resolution is excluded from startup timing.
 The earlier ~39ms ntex result included an unconditional 25ms framework startup
@@ -197,11 +223,12 @@ include ordinary launch variation.
 [Startup diagnosis](rust/README.md#measured-results).
 
 **Warm debug rebuild** means an incremental development build after a public API
-change, measured on **2026-09-18**. The [shared runner](measure-debug-build.py)
+change, measured on **2026-09-18** (**2026-09-22** for Haskell). The [shared runner](measure-debug-build.py)
 renames `NewPost` (OCaml: `Model.new_post`) and updates its consumers across files
 in a disposable source copy. Each of three samples uses a fresh name; the table
 reports their median wall time. C# and Zig use equivalent
-[C#](csharp/measure-build.py) and [Zig](zig/measure-build.py) runners; C# shares its development build between deployment modes. A full warm-up build and a no-change control are
+[C#](csharp/measure-build.py) and [Zig](zig/measure-build.py) runners; Haskell uses
+[its equivalent runner](haskell/measure-build.py); C# shares its development build between deployment modes. A full warm-up build and a no-change control are
 excluded. Dependencies, compiler caches and Kotlin's daemons remain warm.
 Compiled output hashes verify that each edit caused a rebuild.
 
@@ -224,6 +251,9 @@ Compiled output hashes verify that each edit caused a rebuild.
 - Zig: `python3 zig.py build -Doptimize=Debug`, with LLVM, full debug checks
   and metadata. Three public `NewPost` renames and consumer updates rebuild and
   relink the executable, with Zig compiler caches and the shared SQLite engine warm.
+- Haskell: Cabal `--disable-optimization` with `-g`, using the pkgx compiler.
+  Three public `NewPost` type/constructor renames and consumer updates rebuild
+  application modules and relink; optimized external dependencies remain cached.
 
 Timing includes build-command startup/configuration, application compilation and
 linking (or JVM classes/resources). Setup, downloads, source copying/edits, output
@@ -232,7 +262,8 @@ with the same optimized [shared configuration](db/sqlite-config.json).
 Raw samples, edit patches and build logs are in
 `results/debug-rebuild-2026-09-18/` (gitignored); the updated Go and Rust samples
 are in `results/actix-go-final-2026-09-18/debug-builds/`. Zig samples are in
-`results/zig-016-builds/`.
+`results/zig-016-builds/`; Haskell samples are in
+`results/haskell-multicore-build-2026-09-22/`.
 After the per-language toolchain/dependency setup, reproduce from the repository
 root with a fresh output directory:
 
@@ -242,7 +273,7 @@ python3 measure-debug-build.py results/debug-build
 
 **Clean release build** reports three-run medians. Go and Rust retain the
 preceding static-payload sweep's build measurements. Both Kotlin modes retain their preceding remeasurement; the remaining languages retain
-their earlier measurements, except the newly measured Zig stack.
+their earlier measurements, except the newly measured Zig and Haskell stacks.
 Definitions differ by language:
 
 - [Go](go/measure-build.py): a fresh `GOCACHE` per clean build compiles the standard
@@ -274,9 +305,13 @@ Definitions differ by language:
   disposable source copy; compile shared SQLite C, yyjson C, zio, the Zig standard
   library and application, link and strip. Three release builds use the installed
   compiler and warm dependency sources; downloads and toolchain installation are excluded.
+- [Haskell](haskell/measure-build.py): fresh Cabal application build directories;
+  compile Haskell modules and the C configuration shim, link, strip and sign.
+  GHC, optimized external dependencies and native SQLite stay prebuilt, matching
+  OCaml's application-only scope. pkgx resolution and setup are excluded.
 
 Release binary size is the artifact's on-disk size in MiB (2²⁰ bytes), measured on
-2026-09-18. Native executables are stripped: Go uses the normal optimized build
+2026-09-18 (2026-09-22 for Haskell). Native executables are stripped: Go uses the normal optimized build
 with `-trimpath -ldflags='-s -w'`; OCaml uses Dune's release `-O3` profile followed
 by macOS `strip` and ad-hoc signing; Rust uses its release `strip=true` profile.
 Kotlin uses `shadowJar` on OpenJDK 26.0.2.1, plus `buildJit` for the cached launch.
@@ -308,6 +343,11 @@ The GraalVM executable is stripped and ad-hoc signed after compilation.
   the same **1.62 MiB shared SQLite library**, for **2.42 MiB combined**.
   Both executor configurations use the same stripped `ReleaseFast` artifact.
 
+- Haskell's **39.25 MiB stripped executable** contains the GHC runtime and
+  Haskell dependencies and requires the **1.62 MiB shared SQLite library**:
+  **40.87 MiB combined**, excluding macOS system libraries. Both capability
+  configurations use the same executable. No installed GHC is needed to launch it.
+
 System libraries are excluded. The measured Go, Kotlin and OCaml artifacts passed
 echo, committed-write and database-integrity checks. Exact byte counts, hashes,
 build commands and validation logs are in `results/release-size-2026-09-18/`
@@ -322,6 +362,8 @@ in Rust (Actix / serde_json / rusqlite), OCaml (Cohttp / generated ATD codecs us
 Yojson / sqlite3), C# (Kestrel / System.Text.Json / native SQLite), and Zig (std.http / yyjson /
 zqlite with shared SQLite; zio supplies async I/O). Their
 experiment and build-tool dependencies are excluded from release binaries.
+Haskell links Warp, Aeson decoding, jsonifier encoding and direct-sqlite; the
+Snap comparison adapter and Warp's unused TLS certificate support are excluded.
 Go's former Hertz build retained four JSON implementations; the replacement links
 only FastHTTP, the standard JSON engine and Tailscale SQLite. Go 1.27's v1 JSON
 compatibility API delegates to that same v2 engine.
@@ -352,9 +394,11 @@ task echo
 | Kotlin Vert.x (JVM) † | 365.0K | 0.093ms | 434.7 MiB | 380% | 183.04ms | 21.15s | 1.09s |
 | [C# .NET JIT](csharp/) † | 324.8K | 0.132ms | 172.1 MiB | 300% | 166.47ms | 15.83s | 0.707s |
 | [Kotlin Vert.x (GraalVM)](kotlin/#optimized-graalvm-executable) | 306.2K | 0.131ms | 90.1 MiB | 341% | 29.62ms | 149.49s | 1.09s (JVM) |
+| [Haskell Warp (`-N4`)](haskell/) † | 304.1K | 0.113ms | 103.0 MiB | 374% | 14.75ms | 6.79s | 2.78s |
 | [Go FastHTTP (`GOMAXPROCS=4`)](go/) † | 300.3K | 0.117ms | 26.4 MiB | 345% | 8.82ms | 19.87s | 1.03s |
 | [C# .NET AOT](csharp/) † | 290.8K | 0.154ms | 106.2 MiB | 299% | 89.28ms | 24.85s | 0.707s (JIT) |
 | [Go FastHTTP (`GOMAXPROCS=2`)](go/) † | 248.9K | 0.171ms | 24.9 MiB | 197% | 9.26ms | 19.87s | 1.03s |
+| [Haskell Warp (`-N2`)](haskell/) † | 243.9K | 0.179ms | 153.7 MiB | 194% | 13.75ms | 6.79s | 2.78s |
 | [Zig std.http/zio (`-workers 1`)](zig/) † | 230.6K | 0.203ms | 15.9 MiB | 99% | 6.09ms | 34.25s | 3.05s |
 | [Rust Actix (`-workers 1`)](rust/) † | 201.4K | 0.201ms | 12.5 MiB | 99% | 12.68ms | 43.20s | 1.23s |
 | Python Blacksheep | 192K | 0.2ms | — | — | — | — | — |
@@ -376,6 +420,13 @@ Modernized Zig's final four-round sweep is in `results/zig-016-final/summary.jso
 startup samples are in `results/zig-016-start-{1,4}/`, build samples in
 `results/zig-016-builds/`, and exact byte counts/linkage/hashes in
 `results/zig-016-artifact.json` (all gitignored).
+Haskell's final four-round report is
+`results/haskell-multicore-final-2026-09-22/summary.json`; startup/build/profile
+reports use the corresponding `haskell-multicore-{startup,build,profile}-2026-09-22/`
+directories. Exact bytes, linkage and hashes are in
+`results/haskell-multicore-artifact-2026-09-22.json` (all gitignored).
+A compact [measurement record](haskell/measurements.json) retains the published
+aggregates, individual samples, correctness results and source/artifact hashes.
 Full raw JSON, histograms, RSS samples, logs and databases remain locally under
 `results/random-json-2026-09-18/` (gitignored). Historical reports remain under
 `results/actix-go-final-2026-09-18/` and `results/ocaml-2026-09-17/`.

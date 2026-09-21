@@ -64,6 +64,26 @@ Four rounds alternate their order twice, with ten seconds per endpoint. Both
 must exit gracefully and remove their own sockets. The report records the Zig
 source hashes as well as the executable, SQLite library and corpus hashes.
 
+The **Haskell Warp / Aeson + jsonifier / direct-sqlite** stack uses two GHC
+capabilities (`haskell-2`) and four (`haskell-4`), with one SQLite writer in the
+same process. Build with the [pkgx wrapper](../haskell/README.md), then run its
+separate four-round sweep:
+
+```sh
+python3 haskell/build.py --setup
+python3 haskell/test.py
+python3 loadgen/test-servers.py --config haskell-2 haskell-4
+python3 loadgen/measure.py results/haskell-final --rounds 4 --config haskell-2 haskell-4
+python3 haskell/measure-startup.py results/haskell-startup
+python3 haskell/measure-build.py results/haskell-build
+```
+
+Both endpoints retain the same capability count and `-A8m`. The report records
+source, dependency-freeze, executable and native SQLite hashes, verifies all
+committed rows and requires socket cleanup. Haskell's final measurements are
+from **2026-09-22**, separate from the older stacks' sweeps. Profiling and short
+configuration experiments are excluded from the published throughput medians.
+
 Use a fresh output directory. Each round rotates configuration order by one
 position; the default six-configuration sweep uses six rounds so every
 configuration occupies every order position once.
@@ -215,3 +235,11 @@ Four-round medians for the modernized Zig stack from
 | --- | ---: | ---: | ---: | ---: |
 | zig (1 executor) | 123% | 79% | 99% | 441% |
 | zig-4 (4 executors) | 187% | 98% | 329% | 484% |
+
+Four-round Haskell medians from **2026-09-22**,
+`results/haskell-multicore-final-2026-09-22/summary.json`:
+
+| Server configuration | Write server CPU | Write client CPU | Echo server CPU | Echo client CPU |
+| --- | ---: | ---: | ---: | ---: |
+| haskell-2 | 149% | 102% | 194% | 439% |
+| haskell-4 | 176% | 113% | 374% | 453% |

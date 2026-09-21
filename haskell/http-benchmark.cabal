@@ -1,0 +1,42 @@
+cabal-version: 3.0
+name: http-benchmark
+version: 0.1.0.0
+build-type: Simple
+
+flag comparisons
+  description: Include the Snap comparison adapter in the server executable
+  default: False
+  manual: True
+
+flag dev
+  description: Retain native debug metadata for development builds
+  default: False
+  manual: True
+
+executable haskell-benchmark
+  main-is: Main.hs
+  hs-source-dirs: app, src
+  other-modules: Model, Codec, Store
+  default-language: GHC2021
+  ghc-options: -threaded -rtsopts "-with-rtsopts=-N2 -A8m" -Wall
+  if flag(dev)
+    ghc-options: -g
+  build-depends:
+    base >=4.20 && <5, aeson, bytestring, text, direct-sqlite,
+    wai, warp, http-types, network, stm, async, unix, directory,
+    jsonifier
+  if flag(comparisons)
+    cpp-options: -DCOMPARISONS
+    build-depends: snap-core, snap-server
+  if os(darwin)
+    ghc-options: -optl-Wl,-dead_strip
+  c-sources: cbits/sqlite_config.c
+  extra-libraries: sqlite3
+
+executable codec-benchmark
+  main-is: CodecBench.hs
+  hs-source-dirs: comparison, src
+  other-modules: Model, Codec
+  default-language: GHC2021
+  ghc-options: -rtsopts -Wall
+  build-depends: base, aeson, bytestring, text, jsonifier, array

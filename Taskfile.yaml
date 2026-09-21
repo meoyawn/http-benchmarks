@@ -5,6 +5,7 @@ includes:
   rust: {taskfile: rust/Taskfile.yaml, dir: rust}
   go: {taskfile: go/Taskfile.yaml, dir: go}
   ocaml: {taskfile: ocaml/Taskfile.yaml, dir: ocaml}
+  haskell: {taskfile: haskell/Taskfile.yaml, dir: haskell}
 
 vars:
   GO_MIGRATE: ../../../github/migrate/cmd/migrate/migrate

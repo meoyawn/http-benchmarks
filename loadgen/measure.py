@@ -39,7 +39,8 @@ def aggregate(runs):
 
 
 DEFAULT_CONFIGS = ("rust-1", "go-2", "ocaml-1", "rust-3", "go-4", "ocaml-4")
-CONFIG_NAMES = (*DEFAULT_CONFIGS, "csharp-jit", "csharp-aot", "kotlin-jvm", "zig", "zig-4")
+CONFIG_NAMES = (*DEFAULT_CONFIGS, "csharp-jit", "csharp-aot", "kotlin-jvm", "zig", "zig-4",
+                "haskell-1", "haskell-2", "haskell-4", "haskell-8", "haskell-8-hybrid")
 
 
 def configurations(names):
@@ -55,6 +56,11 @@ def configurations(names):
         "zig": (ROOT / "zig/zig-out/bin/zig", ["-workers", "1"], {}),
         "zig-4": (ROOT / "zig/zig-out/bin/zig", ["-workers", "4"], {}),
     }
+    for capabilities in (1, 2, 4, 8):
+        configs[f"haskell-{capabilities}"] = (ROOT / "haskell/bin/haskell-benchmark",
+            ["+RTS", f"-N{capabilities}", "-A8m", "-RTS"], {})
+    configs["haskell-8-hybrid"] = (ROOT / "haskell/bin/haskell-benchmark",
+        ["-fork", "pinned", "-sqlite-step", "hybrid", "+RTS", "-N8", "-A8m", "-RTS"], {})
     if "csharp-jit" in names:
         runtimes = subprocess.check_output(["pkgx", "dotnet", "--list-runtimes"], text=True)
         runtime_path = re.search(r"Microsoft.NETCore.App .* \[(.*)\]", runtimes)[1]
@@ -114,6 +120,8 @@ def main():
             tracked += [p for p in configs[name][0].parent.iterdir() if p.is_file() and p.suffix != ".pdb"]
         elif name.startswith("zig"):
             tracked += list((ROOT / "zig/.tools/sqlite/lib").glob("libsqlite3.*"))
+        elif name.startswith("haskell-"):
+            tracked += list((ROOT / "haskell/.tools/sqlite/lib").glob("libsqlite3.*"))
         elif name == "kotlin-jvm":
             tracked += [ROOT / "kotlin/build/libs/kotlin-1.0-all.jar", ROOT / "kotlin/build/jit/kotlin-bench.aot"]
             tracked += list((ROOT / "kotlin/build/jit/native").glob("*"))
@@ -128,6 +136,9 @@ def main():
               "load_generator": subprocess.check_output([str(workload.BINARY), "-version"], text=True).strip(),
               "artifacts_sha256": hashes, "configurations": {k: {"binary": artifact_key(b), "args": flags, "env": env} for k, (b, flags, env) in configs.items()},
               "sqlite_configuration": json.loads((ROOT / "db/sqlite-config.json").read_text()),
+              "haskell_source_sha256": {str(p.relative_to(ROOT)): digest(p) for pattern in
+                  ("src/*.hs", "app/*.hs", "cbits/*.c", "*.cabal", "cabal.project", "cabal.project.freeze", "toolchain.sh", "build.py")
+                  for p in sorted((ROOT / "haskell").glob(pattern))} if any(name.startswith("haskell-") for name in configs) else {},
               "source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sorted(ROOT.glob("loadgen/*")) if p.suffix in (".go", ".py", ".mod", ".sum")},
               "zig_source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sorted([*(ROOT / "zig/src").glob("*.zig"), *(ROOT / "zig").glob("build.zig*"), ROOT / "zig/zig.py"])}
                                      if any(name.startswith("zig") for name in configs) else {},
@@ -155,8 +166,8 @@ def main():
                         runs[name][endpoint].append(result)
                 finally:
                     workload.stop(server)
-                    if name.startswith("zig") and socket.exists():
-                        raise RuntimeError("Zig left its socket behind")
+                    if name.startswith(("zig", "haskell-")) and socket.exists():
+                        raise RuntimeError(f"{name} left its socket behind")
             accepted_exits = (0, 128 + signal.SIGTERM, -signal.SIGTERM) if name == "kotlin-jvm" else (0,)
             if server.returncode not in accepted_exits:
                 raise RuntimeError(f"{name} failed to stop cleanly: {server.returncode}")
