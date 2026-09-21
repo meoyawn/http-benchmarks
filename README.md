@@ -16,6 +16,7 @@ sweep with one and four HTTP executors. Configurations rotate through order
 positions within each sweep, with fresh processes and databases.
 Haskell's **two additional † rows** use the same workload in a separate
 four-round sweep on **2026-09-22**; they were not measured alongside the older stacks.
+Bun's **additional † row** uses its own four-round sweep on **2026-09-22**.
 Each runs `/posts` for 10 seconds, then `/echo` for 10 seconds, at **50 concurrent requests**, without HTTP warm-up.
 
 The seeded corpus has **65,536 valid email/content pairs** and **32–256 Unicode
@@ -32,8 +33,9 @@ tests; normal desktop applications remain active. Separate client CPU, calibrati
 reproduction commands and isolation limits are in the [load methodology](loadgen/README.md).
 
 **Unmarked rows retain historical static-payload results and are not directly
-comparable to the randomized rows.** Zig and Haskell startup, clean/debug build
+comparable to the randomized rows.** Zig, Haskell and Bun startup, release build
 times and artifact size are also measured with their current implementations.
+Zig and Haskell debug rebuilds are measured; Bun requires no development build.
 The other stacks retain their prior non-HTTP measurements.
 
 Go, Kotlin, OCaml, Rust and C# use the same precompiled whole-string ASCII email rule:
@@ -108,11 +110,21 @@ the collapse seen with 0.3.2 and restored multicore scaling. SQLite uses the
 library's callback-free stepping API; long foreign calls can delay GHC collection.
 [Selection, profiling, tradeoffs and reproduction](haskell/README.md).
 
+Bun uses **1.4.2**, native **`Bun.serve` routes**, **`bun:sqlite`**, and
+**Valibot 1.5.0**, with one JavaScript event loop and one synchronous SQLite
+connection. Valibot uses the same whole-string ASCII email rule and shared
+fixtures. Prepared statements and the immediate-transaction wrapper are reused;
+each response follows its own commit. Connection pragmas match the shared
+settings above, but Bun uses **macOS system SQLite 3.51.0**, with its default compile
+options and allocator, rather than the other seven implementations' custom
+engine. The release executable includes the Bun runtime and Valibot.
+[Implementation, measurement definitions and reproduction](bun/README.md).
+
 ```sh
 task post
 ```
 
-Build and reproduction: [randomized load runner](loadgen/README.md). `task benchmark` reruns Rust/Go/OCaml; the load-runner documentation includes C#/Kotlin and the separate Zig and Haskell sweeps.
+Build and reproduction: [randomized load runner](loadgen/README.md). `task benchmark` reruns Rust/Go/OCaml; the load-runner documentation includes C#/Kotlin and the separate Zig, Haskell and Bun sweeps.
 
 ## SQLite write throughput
 
@@ -131,8 +143,8 @@ Build and reproduction: [randomized load runner](loadgen/README.md). `task bench
 | [Go FastHTTP (`GOMAXPROCS=4`)](go/) † | 28.6K | 1.372ms | 26.1 MiB | 183% | 8.82ms | 19.87s | 1.03s | 7.78 MiB |
 | [Zig std.http/zio (`-workers 4`)](zig/) † | 26.8K | 1.493ms | 14.9 MiB | 187% | 5.84ms | 34.25s | 3.05s | 0.80 MiB |
 | [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) † | 23.0K | 1.685ms | 95.4 MiB | 226% | 10.00ms | 1.12s | 0.521s | 4.60 MiB |
-| JS Bun Hono | 21K | 1.9ms | — | — | — | — | — | — |
 | Python Blacksheep | 19K | 2.5ms | — | — | — | — | — | — |
+| [Bun native HTTP + SQLite](bun/) † | 13.3K | 2.716ms | 50.8 MiB | 83% | 17.37ms | 0.152s | 0s | 59.34 MiB |
 | Elixir Bandit | 10K | 4.9ms | — | — | — | — | — | — |
 | [Kotlin Vert.x SQLite Panama (GraalVM)](kotlin/#optimized-graalvm-executable) | 8.9K | 5.109ms | 104.6 MiB | 116% | 29.62ms | 149.49s | 1.09s (JVM) | 88.12 MiB |
 
@@ -190,7 +202,14 @@ clean application release builds **6.79s**, and debug edits rebuild in **2.78s**
 The callback-free SQLite path improves throughput but has longer write tails:
 p99 is **24.247 / 22.495ms**. The [Haskell notes](haskell/README.md) retain
 ordinary and mixed FFI comparisons, the timer diagnosis and complete aggregates.
-These are separate September 22 measurements; historical JS results remain unchanged.
+These are separate September 22 measurements.
+
+Bun measures **13.3K writes/sec / 128.4K echo RPS**, with ranges of
+**13.2K–13.5K / 126.6K–128.8K** across four rounds. Startup is **17.37ms**;
+clean executable builds take **0.152s**. Development runs TypeScript directly,
+so the dev/debug rebuild is **0s**. Peak write/echo RSS is **50.8 / 53.7 MiB**. These measurements use
+randomized JSON and the default macOS SQLite engine; the historical static-payload
+JS result is superseded. [Samples and verification](bun/measurements.json).
 
 Both Kotlin rows were fully remeasured after removing Jackson, staging native
 libraries at build time and adding a HotSpot class/linkage/profile cache for the
@@ -214,7 +233,7 @@ are process-start measurements, not guaranteed cold-cache startup.
 [Rust script](rust/measure-startup.py),
 [Kotlin GraalVM startup script](kotlin/measure-startup.py),
 [C# script](csharp/measure.py), [Zig script](zig/measure-startup.py),
-[Haskell script](haskell/measure-startup.py). Rust also includes HTTP worker setup. C# launches
+[Haskell script](haskell/measure-startup.py), [Bun script](bun/measure-startup.py). Rust also includes HTTP worker setup. C# launches
 the built apphost directly after resolving the runtime through `pkgx dotnet`;
 pkgx resolution is excluded from startup timing.
 The earlier ~39ms ntex result included an unconditional 25ms framework startup
@@ -222,8 +241,9 @@ sleep. Actix removes that framework delay; the current process-start measurement
 include ordinary launch variation.
 [Startup diagnosis](rust/README.md#measured-results).
 
-**Warm debug rebuild** means an incremental development build after a public API
-change, measured on **2026-09-18** (**2026-09-22** for Haskell). The [shared runner](measure-debug-build.py)
+**Warm debug rebuild** means a development rebuild after a public API
+change, measured on **2026-09-18** (**2026-09-22** for Haskell). Bun's **0s**
+denotes that no development build step is required. The [shared runner](measure-debug-build.py)
 renames `NewPost` (OCaml: `Model.new_post`) and updates its consumers across files
 in a disposable source copy. Each of three samples uses a fresh name; the table
 reports their median wall time. C# and Zig use equivalent
@@ -254,16 +274,21 @@ Compiled output hashes verify that each edit caused a rebuild.
 - Haskell: Cabal `--disable-optimization` with `-g`, using the pkgx compiler.
   Three public `NewPost` type/constructor renames and consumer updates rebuild
   application modules and relink; optimized external dependencies remain cached.
+- Bun: **0s**; `bun --watch src/server.ts` runs TypeScript directly, with no
+  separate development build or bundle.
 
 Timing includes build-command startup/configuration, application compilation and
 linking (or JVM classes/resources). Setup, downloads, source copying/edits, output
 checks, tests and application startup are excluded. Native SQLite stays cached
-with the same optimized [shared configuration](db/sqlite-config.json).
+with the same optimized [shared configuration](db/sqlite-config.json), except
+Bun's system-provided engine.
 Raw samples, edit patches and build logs are in
 `results/debug-rebuild-2026-09-18/` (gitignored); the updated Go and Rust samples
 are in `results/actix-go-final-2026-09-18/debug-builds/`. Zig samples are in
 `results/zig-016-builds/`; Haskell samples are in
 `results/haskell-multicore-build-2026-09-22/`.
+Bun's [build runner](bun/measure-build.py) records clean release samples in
+`results/bun-build-final-2026-09-22/`.
 After the per-language toolchain/dependency setup, reproduce from the repository
 root with a fresh output directory:
 
@@ -273,7 +298,7 @@ python3 measure-debug-build.py results/debug-build
 
 **Clean release build** reports three-run medians. Go and Rust retain the
 preceding static-payload sweep's build measurements. Both Kotlin modes retain their preceding remeasurement; the remaining languages retain
-their earlier measurements, except the newly measured Zig and Haskell stacks.
+their earlier measurements, except the newly measured Zig, Haskell and Bun stacks.
 Definitions differ by language:
 
 - [Go](go/measure-build.py): a fresh `GOCACHE` per clean build compiles the standard
@@ -309,9 +334,13 @@ Definitions differ by language:
   compile Haskell modules and the C configuration shim, link, strip and sign.
   GHC, optimized external dependencies and native SQLite stay prebuilt, matching
   OCaml's application-only scope. pkgx resolution and setup are excluded.
+- [Bun](bun/measure-build.py): remove `dist`, then `bun run build` transpiles,
+  bundles/minifies the application and Valibot, and packages the installed Bun
+  runtime with `--compile`. Runtime/SQLite compilation, dependency installation,
+  downloads and TypeScript type checking are excluded.
 
 Release binary size is the artifact's on-disk size in MiB (2²⁰ bytes), measured on
-2026-09-18 (2026-09-22 for Haskell). Native executables are stripped: Go uses the normal optimized build
+2026-09-18 (2026-09-22 for Haskell and Bun). Artifacts use release settings: Go uses the normal optimized build
 with `-trimpath -ldflags='-s -w'`; OCaml uses Dune's release `-O3` profile followed
 by macOS `strip` and ad-hoc signing; Rust uses its release `strip=true` profile.
 Kotlin uses `shadowJar` on OpenJDK 26.0.2.1, plus `buildJit` for the cached launch.
@@ -347,6 +376,10 @@ The GraalVM executable is stripped and ad-hoc signed after compilation.
   Haskell dependencies and requires the **1.62 MiB shared SQLite library**:
   **40.87 MiB combined**, excluding macOS system libraries. Both capability
   configurations use the same executable. No installed GHC is needed to launch it.
+- Bun's **59.34 MiB standalone executable** contains the Bun runtime, application
+  and Valibot; system SQLite remains external. This is Bun's `--compile --minify`
+  output, with no separate Bun runtime installation required. Application code
+  is bundled JavaScript, executed by the included runtime.
 
 System libraries are excluded. The measured Go, Kotlin and OCaml artifacts passed
 echo, committed-write and database-integrity checks. Exact byte counts, hashes,
@@ -402,9 +435,9 @@ task echo
 | [Zig std.http/zio (`-workers 1`)](zig/) † | 230.6K | 0.203ms | 15.9 MiB | 99% | 6.09ms | 34.25s | 3.05s |
 | [Rust Actix (`-workers 1`)](rust/) † | 201.4K | 0.201ms | 12.5 MiB | 99% | 12.68ms | 43.20s | 1.23s |
 | Python Blacksheep | 192K | 0.2ms | — | — | — | — | — |
-| JS Bun Hono | 156K | 0.3ms | — | — | — | — | — |
 | [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) † | 139.2K | 0.330ms | 98.2 MiB | 316% | 10.00ms | 1.12s | 0.521s |
 | Elixir Bandit | 139K | 0.3ms | — | — | — | — | — |
+| [Bun native HTTP + SQLite](bun/) † | 128.4K | 0.353ms | 53.7 MiB | 102% | 17.37ms | 0.152s | 0s |
 | [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) † | 67.6K | 0.692ms | 39.2 MiB | 94% | 8.92ms | 1.12s | 0.521s |
 
 All randomized requests returned the expected status. Every database passed
@@ -427,6 +460,11 @@ directories. Exact bytes, linkage and hashes are in
 `results/haskell-multicore-artifact-2026-09-22.json` (all gitignored).
 A compact [measurement record](haskell/measurements.json) retains the published
 aggregates, individual samples, correctness results and source/artifact hashes.
+Bun's corresponding [measurement record](bun/measurements.json) includes all four
+HTTP rounds, five startup samples, three clean release builds, SQLite version and
+compile options, and source/artifact hashes. Full raw Bun results are in
+`results/bun-final-2026-09-22/`, `results/bun-startup-2026-09-22/` and
+`results/bun-build-final-2026-09-22/` (gitignored).
 Full raw JSON, histograms, RSS samples, logs and databases remain locally under
 `results/random-json-2026-09-18/` (gitignored). Historical reports remain under
 `results/actix-go-final-2026-09-18/` and `results/ocaml-2026-09-17/`.

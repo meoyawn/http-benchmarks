@@ -1,0 +1,444 @@
+{
+  "date": "2026-09-22",
+  "platform": "macOS-26.4-arm64-arm-64bit",
+  "method": "Rotating order; fresh processes/databases; 50 concurrent requests; posts then echo; no HTTP warm-up; outstanding requests drain; medians except maximum RSS; 100% CPU = one core",
+  "rounds": 4,
+  "duration_per_endpoint": "10s",
+  "connections": 50,
+  "client_processes": 5,
+  "client_cpus": 5,
+  "corpus_seed": 20260918,
+  "corpus_entries": 65536,
+  "load_generator": "vegeta/v12.13.0 randomized-v1",
+  "runtime": {
+    "bun": "1.4.2",
+    "sqlite": "3.51.0",
+    "sqlite_compile_options": [
+      "ATOMIC_INTRINSICS=1",
+      "BUG_COMPATIBLE_20160819",
+      "CCCRYPT256",
+      "CODEC=see-cccrypt",
+      "COMPILER=clang-21.0.0",
+      "DEFAULT_AUTOVACUUM",
+      "DEFAULT_CACHE_SIZE=2000",
+      "DEFAULT_CKPTFULLFSYNC",
+      "DEFAULT_FILE_FORMAT=4",
+      "DEFAULT_JOURNAL_SIZE_LIMIT=32768",
+      "DEFAULT_LOOKASIDE=1200,102",
+      "DEFAULT_MEMSTATUS=0",
+      "DEFAULT_MMAP_SIZE=0",
+      "DEFAULT_PAGE_SIZE=4096",
+      "DEFAULT_PCACHE_INITSZ=20",
+      "DEFAULT_RECURSIVE_TRIGGERS",
+      "DEFAULT_SECTOR_SIZE=4096",
+      "DEFAULT_SYNCHRONOUS=2",
+      "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+      "DEFAULT_WAL_SYNCHRONOUS=1",
+      "DEFAULT_WORKER_THREADS=0",
+      "DIRECT_OVERFLOW_READ",
+      "DQS=3",
+      "ENABLE_API_ARMOR",
+      "ENABLE_BYTECODE_VTAB",
+      "ENABLE_COLUMN_METADATA",
+      "ENABLE_DBSTAT_VTAB",
+      "ENABLE_FTS3",
+      "ENABLE_FTS3_PARENTHESIS",
+      "ENABLE_FTS3_TOKENIZER",
+      "ENABLE_FTS4",
+      "ENABLE_FTS5",
+      "ENABLE_LOCKING_STYLE=1",
+      "ENABLE_MATH_FUNCTIONS",
+      "ENABLE_NORMALIZE",
+      "ENABLE_PREUPDATE_HOOK",
+      "ENABLE_RTREE",
+      "ENABLE_SESSION",
+      "ENABLE_SETLK_TIMEOUT",
+      "ENABLE_SNAPSHOT",
+      "ENABLE_SQLLOG",
+      "ENABLE_STMT_SCANSTATUS",
+      "ENABLE_UNKNOWN_SQL_FUNCTION",
+      "ENABLE_UPDATE_DELETE_LIMIT",
+      "HAS_CODEC_RESTRICTED",
+      "HAVE_ISNAN",
+      "MALLOC_SOFT_LIMIT=1024",
+      "MAX_ATTACHED=10",
+      "MAX_COLUMN=2000",
+      "MAX_COMPOUND_SELECT=500",
+      "MAX_DEFAULT_PAGE_SIZE=8192",
+      "MAX_EXPR_DEPTH=1000",
+      "MAX_FUNCTION_ARG=127",
+      "MAX_LENGTH=2147483645",
+      "MAX_LIKE_PATTERN_LENGTH=50000",
+      "MAX_MMAP_SIZE=1073741824",
+      "MAX_PAGE_COUNT=1073741823",
+      "MAX_PAGE_SIZE=65536",
+      "MAX_SQL_LENGTH=1000000000",
+      "MAX_TRIGGER_DEPTH=1000",
+      "MAX_VARIABLE_NUMBER=500000",
+      "MAX_VDBE_OP=250000000",
+      "MAX_WORKER_THREADS=8",
+      "MUTEX_UNFAIR",
+      "OMIT_AUTORESET",
+      "OMIT_LOAD_EXTENSION",
+      "STMTJRNL_SPILL=131072",
+      "SYSTEM_MALLOC",
+      "TEMP_STORE=1",
+      "THREADSAFE=2",
+      "USE_URI"
+    ]
+  },
+  "valibot": "1.5.0",
+  "sqlite_difference": "bun:sqlite default engine (system SQLite on macOS); matching connection pragmas, no custom engine or global allocator configuration",
+  "connection_pragmas": {
+    "journal_mode": "wal",
+    "synchronous": 1,
+    "foreign_keys": 1,
+    "busy_timeout": 10000,
+    "cache_size": -2000,
+    "wal_autocheckpoint": 1000,
+    "temp_store": 2,
+    "mmap_size": 0
+  },
+  "source_sha256": {
+    "bun/bun.lock": "a205b92ecc638fd5bb4e28fa3d0e83a551c41684a3046085c51e9fcd9bd5a9f1",
+    "bun/package.json": "a7154df9910ce4df190dfa795e8582d35ecfcb5f679c0dcb8496edc604b113fe",
+    "bun/src/new-post.ts": "f01e4416ed07460d7ffbddba58b704f86f1ec20f8a8bd76fce6864e8801f7294",
+    "bun/src/server.ts": "31afc7c6acfa20a5f98307a3b38b92e6ecd74f57ca26535a1f5ddf0506b2de1c"
+  },
+  "measurement_runner_sha256": {
+    "loadgen/go.mod": "9c28127e53777c5b0d203f491f0c3ed027048213e67391dfd8ca552cb5a7288b",
+    "loadgen/go.sum": "7eb92259c1e41330b27f682d971bd4d5eb57cffe696f77f3d0e64687d649ff54",
+    "loadgen/host.py": "2f01bd43eca2c8d3fd4d33df9dd4880957badb5fce3592109145a8f1c3feeb71",
+    "loadgen/main.go": "aef5d5a567edcdb4ffb442ea3055310944532997e7d1589a947c37e3c7809f35",
+    "loadgen/measure.py": "1fae6d1946ec2f3108bbff0fa384d884c5fb42e74f572ebb9f99247268d65f54",
+    "loadgen/run.py": "f81d215ed792da5fd943b87480441b9cc4a872f33ac8e132fccf9e843295b07c",
+    "loadgen/test-servers.py": "51df20950e59b05bf4378f81f9dcb1d4f01b98a98b510035e84d9c6ca2877694",
+    "loadgen/test.py": "56e35ee2c8ee507f7f83c2dd36210b4be329e56bb9d742c1485b0cdf4ba6184f",
+    "loadgen/workload.py": "e034af2e0a2ce2222658b5f05d24be75642287f5b568634a2efc588ded314098"
+  },
+  "artifact": {
+    "path": "bun/dist/server",
+    "bytes": 62226930,
+    "mib": 59.34422492980957,
+    "sha256": "f53e6ccf00a4484bae6bd0d6a25f5b6ee0fcc612c4c798e7b23dde5a34102434",
+    "linkage": [
+      "\t/usr/lib/libicucore.A.dylib (compatibility version 1.0.0, current version 78.1.0)",
+      "\t/usr/lib/libresolv.9.dylib (compatibility version 1.0.0, current version 1.0.0)",
+      "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2100.43.0)",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)"
+    ]
+  },
+  "artifacts_sha256": {
+    ".tools/random-json-v1.jsonl": "6ceceb17e1eff0831fcee960f99403185f7cb83408f7cb3a13dd0db09acc0945",
+    "bun/dist/server": "f53e6ccf00a4484bae6bd0d6a25f5b6ee0fcc612c4c798e7b23dde5a34102434",
+    "loadgen/bombard": "154372c82daff01cc0c63149254c888f06eb4d5033aff4f5ce82596aa5f1d4f5"
+  },
+  "summary": {
+    "posts": {
+      "rps_median": 13343.860213028742,
+      "rps_min": 13208.914107873532,
+      "rps_max": 13521.69668939605,
+      "p50_ms_median": 2.716,
+      "p95_ms_median": 9.607,
+      "p99_ms_median": 10.739,
+      "peak_rss_mib_max": 50.765625,
+      "server_cpu_percent_median": 83.3154177224533,
+      "client_cpu_percent_median": 39.82651887683609,
+      "client_peak_rss_mib_max": 256.046875
+    },
+    "echo": {
+      "rps_median": 128383.49383431529,
+      "rps_min": 126599.0223661682,
+      "rps_max": 128816.48802414189,
+      "p50_ms_median": 0.353,
+      "p95_ms_median": 0.6789999999999999,
+      "p99_ms_median": 0.8995,
+      "peak_rss_mib_max": 53.671875,
+      "server_cpu_percent_median": 102.48319798494413,
+      "client_cpu_percent_median": 270.8752493117587,
+      "client_peak_rss_mib_max": 256.90625
+    }
+  },
+  "http_runs": {
+    "posts": [
+      {
+        "requests": 135294,
+        "requests_per_second": 13521.69668939605,
+        "p50_seconds": 0.002707,
+        "p95_seconds": 0.009391,
+        "p99_seconds": 0.010319,
+        "peak_sampled_rss_mib": 50.28125,
+        "server_cpu_percent": 83.75228632248209,
+        "client_cpu_percent": 39.9714482659229,
+        "status_codes": {
+          "201": 135294
+        },
+        "errors": {},
+        "wall_seconds": 10.005697,
+        "seed": 20260918
+      },
+      {
+        "requests": 133795,
+        "requests_per_second": 13373.305484899394,
+        "p50_seconds": 0.002727,
+        "p95_seconds": 0.009615,
+        "p99_seconds": 0.010767,
+        "peak_sampled_rss_mib": 48.921875,
+        "server_cpu_percent": 83.36138700553903,
+        "client_cpu_percent": 39.68158948774928,
+        "status_codes": {
+          "201": 133795
+        },
+        "errors": {},
+        "wall_seconds": 10.004632,
+        "seed": 20260919
+      },
+      {
+        "requests": 132148,
+        "requests_per_second": 13208.914107873532,
+        "p50_seconds": 0.002711,
+        "p95_seconds": 0.009599,
+        "p99_seconds": 0.010895,
+        "peak_sampled_rss_mib": 50.765625,
+        "server_cpu_percent": 82.8630762132394,
+        "client_cpu_percent": 40.468997014930146,
+        "status_codes": {
+          "201": 132148
+        },
+        "errors": {},
+        "wall_seconds": 10.004456,
+        "seed": 20260920
+      },
+      {
+        "requests": 133193,
+        "requests_per_second": 13314.41494115809,
+        "p50_seconds": 0.002721,
+        "p95_seconds": 0.009615,
+        "p99_seconds": 0.010711,
+        "peak_sampled_rss_mib": 50.109375,
+        "server_cpu_percent": 83.2694484393676,
+        "client_cpu_percent": 39.00654849735631,
+        "status_codes": {
+          "201": 133193
+        },
+        "errors": {},
+        "wall_seconds": 10.003669,
+        "seed": 20260921
+      }
+    ],
+    "echo": [
+      {
+        "requests": 1266309,
+        "requests_per_second": 126599.0223661682,
+        "p50_seconds": 0.000357,
+        "p95_seconds": 0.000689,
+        "p99_seconds": 0.000908,
+        "peak_sampled_rss_mib": 53.4375,
+        "server_cpu_percent": 102.47419699719609,
+        "client_cpu_percent": 271.02193667634486,
+        "status_codes": {
+          "200": 1266309
+        },
+        "errors": {},
+        "wall_seconds": 10.002518,
+        "seed": 20260918
+      },
+      {
+        "requests": 1281604,
+        "requests_per_second": 128143.4978726306,
+        "p50_seconds": 0.000352,
+        "p95_seconds": 0.000681,
+        "p99_seconds": 0.000908,
+        "peak_sampled_rss_mib": 52.6875,
+        "server_cpu_percent": 102.48648203301984,
+        "client_cpu_percent": 276.4295289451321,
+        "status_codes": {
+          "200": 1281604
+        },
+        "errors": {},
+        "wall_seconds": 10.001319,
+        "seed": 20260919
+      },
+      {
+        "requests": 1288363,
+        "requests_per_second": 128816.48802414189,
+        "p50_seconds": 0.000352,
+        "p95_seconds": 0.000677,
+        "p99_seconds": 0.000891,
+        "peak_sampled_rss_mib": 53.671875,
+        "server_cpu_percent": 102.6842071689374,
+        "client_cpu_percent": 270.7285619471726,
+        "status_codes": {
+          "200": 1288363
+        },
+        "errors": {},
+        "wall_seconds": 10.001538,
+        "seed": 20260920
+      },
+      {
+        "requests": 1286487,
+        "requests_per_second": 128623.48979599998,
+        "p50_seconds": 0.000354,
+        "p95_seconds": 0.000677,
+        "p99_seconds": 0.000879,
+        "peak_sampled_rss_mib": 53.40625,
+        "server_cpu_percent": 102.4799139368684,
+        "client_cpu_percent": 262.0549672264237,
+        "status_codes": {
+          "200": 1286487
+        },
+        "errors": {},
+        "wall_seconds": 10.00196,
+        "seed": 20260921
+      }
+    ]
+  },
+  "verification": [
+    {
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "foreign_keys": [],
+      "posts": 135294,
+      "users": 57211,
+      "user_sequence": 135294,
+      "post_sequence": 135294,
+      "completed_post_responses": 135294,
+      "invalid_content_or_users": 0
+    },
+    {
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "foreign_keys": [],
+      "posts": 133795,
+      "users": 57006,
+      "user_sequence": 133795,
+      "post_sequence": 133795,
+      "completed_post_responses": 133795,
+      "invalid_content_or_users": 0
+    },
+    {
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "foreign_keys": [],
+      "posts": 132148,
+      "users": 56811,
+      "user_sequence": 132148,
+      "post_sequence": 132148,
+      "completed_post_responses": 132148,
+      "invalid_content_or_users": 0
+    },
+    {
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "foreign_keys": [],
+      "posts": 133193,
+      "users": 56940,
+      "user_sequence": 133193,
+      "post_sequence": 133193,
+      "completed_post_responses": 133193,
+      "invalid_content_or_users": 0
+    }
+  ],
+  "startup": {
+    "method": "Fresh migrated databases/processes; no cache flush; first post-bind log; untimed echo readiness check",
+    "sha256": "f53e6ccf00a4484bae6bd0d6a25f5b6ee0fcc612c4c798e7b23dde5a34102434",
+    "runs": [
+      {
+        "launch_to_listening_ms": 30.167042,
+        "ready_line": "Listening on /tmp/bun-start-3172.sock",
+        "echo_check": "passed"
+      },
+      {
+        "launch_to_listening_ms": 17.366792,
+        "ready_line": "Listening on /tmp/bun-start-3172.sock",
+        "echo_check": "passed"
+      },
+      {
+        "launch_to_listening_ms": 16.674833,
+        "ready_line": "Listening on /tmp/bun-start-3172.sock",
+        "echo_check": "passed"
+      },
+      {
+        "launch_to_listening_ms": 17.487834,
+        "ready_line": "Listening on /tmp/bun-start-3172.sock",
+        "echo_check": "passed"
+      },
+      {
+        "launch_to_listening_ms": 16.338666,
+        "ready_line": "Listening on /tmp/bun-start-3172.sock",
+        "echo_check": "passed"
+      }
+    ],
+    "summary": {
+      "median_ms": 17.366792,
+      "min_ms": 16.338666,
+      "max_ms": 30.167042
+    }
+  },
+  "build": {
+    "bun_version": "1.4.2",
+    "runs": [
+      {
+        "label": "clean-1",
+        "seconds": 0.152236084,
+        "command": [
+          "bun",
+          "run",
+          "build"
+        ],
+        "sha256": "f53e6ccf00a4484bae6bd0d6a25f5b6ee0fcc612c4c798e7b23dde5a34102434",
+        "bytes": 62226930
+      },
+      {
+        "label": "clean-2",
+        "seconds": 0.13799766700000002,
+        "command": [
+          "bun",
+          "run",
+          "build"
+        ],
+        "sha256": "f53e6ccf00a4484bae6bd0d6a25f5b6ee0fcc612c4c798e7b23dde5a34102434",
+        "bytes": 62226930
+      },
+      {
+        "label": "clean-3",
+        "seconds": 0.17119270899999994,
+        "command": [
+          "bun",
+          "run",
+          "build"
+        ],
+        "sha256": "f53e6ccf00a4484bae6bd0d6a25f5b6ee0fcc612c4c798e7b23dde5a34102434",
+        "bytes": 62226930
+      }
+    ],
+    "clean_median_seconds": 0.152236084,
+    "clean_definition": "Remove dist; bun run build bundles/minifies the application and Valibot into a standalone executable containing the installed Bun runtime. No TypeScript type checking or Bun/SQLite compilation.",
+    "debug_definition": "No development build step: bun --watch src/server.ts runs TypeScript directly. Zero denotes that no separate rebuild is required.",
+    "excludes": "Dependency/runtime downloads, dependency install, source copying/edits, tests, type checking and server startup",
+    "debug_rebuild_seconds": 0
+  },
+  "correctness_tests": [
+    "bun run check",
+    "python3 bun/test-http.py",
+    "python3 loadgen/test-servers.py --config bun"
+  ],
+  "raw_reports": [
+    "results/bun-final-2026-09-22/summary.json",
+    "results/bun-startup-2026-09-22/summary.json",
+    "results/bun-build-final-2026-09-22/summary.json"
+  ],
+  "source_hash_scope": "Hashes describe the files used for the timed runs. package.json subsequently removed its unused debug bundling script; server source, dependencies and release build command are unchanged."
+}

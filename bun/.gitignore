@@ -6,3 +6,4 @@ node_modules/
 dist/
 openapi.json
 tsconfig.tsbuildinfo
+*.bun-build

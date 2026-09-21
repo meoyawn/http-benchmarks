@@ -55,7 +55,7 @@ def main():
                     raise RuntimeError(f"{name}: {error}\n{(directory / 'server.log').read_text()}") from error
                 finally:
                     workload.stop(server)
-                    if name.startswith(("zig", "haskell-")) and sock.exists():
+                    if name.startswith(("zig", "haskell-", "bun")) and sock.exists():
                         raise RuntimeError(f"{name} left its socket behind")
             accepted = (0, 128 + signal.SIGTERM, -signal.SIGTERM) if name == "kotlin-jvm" else (0,)
             if server.returncode not in accepted:

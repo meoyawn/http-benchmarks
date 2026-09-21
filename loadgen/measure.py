@@ -40,11 +40,12 @@ def aggregate(runs):
 
 DEFAULT_CONFIGS = ("rust-1", "go-2", "ocaml-1", "rust-3", "go-4", "ocaml-4")
 CONFIG_NAMES = (*DEFAULT_CONFIGS, "csharp-jit", "csharp-aot", "kotlin-jvm", "zig", "zig-4",
-                "haskell-1", "haskell-2", "haskell-4", "haskell-8", "haskell-8-hybrid")
+                "haskell-1", "haskell-2", "haskell-4", "haskell-8", "haskell-8-hybrid", "bun")
 
 
 def configurations(names):
     configs = {
+        "bun": (ROOT / "bun/dist/server", [], {}),
         "rust-1": (ROOT / "rust/target/release/rust-benchmark", ["-workers", "1"], {}),
         "go-2": (ROOT / "go/bench", [], {"GOMAXPROCS": "2"}),
         "ocaml-1": (ROOT / "ocaml/_build/default/bin/bench.exe", ["-domains", "1"], {}),
@@ -136,6 +137,8 @@ def main():
               "load_generator": subprocess.check_output([str(workload.BINARY), "-version"], text=True).strip(),
               "artifacts_sha256": hashes, "configurations": {k: {"binary": artifact_key(b), "args": flags, "env": env} for k, (b, flags, env) in configs.items()},
               "sqlite_configuration": json.loads((ROOT / "db/sqlite-config.json").read_text()),
+              "sqlite_configuration_exceptions": {"bun": "bun:sqlite default engine (system SQLite on macOS); matching connection pragmas, no custom engine or global allocator configuration"} if "bun" in configs else {},
+              "bun_source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sorted([*(ROOT / "bun/src").glob("*.ts"), ROOT / "bun/package.json", ROOT / "bun/bun.lock"])} if "bun" in configs else {},
               "haskell_source_sha256": {str(p.relative_to(ROOT)): digest(p) for pattern in
                   ("src/*.hs", "app/*.hs", "cbits/*.c", "*.cabal", "cabal.project", "cabal.project.freeze", "toolchain.sh", "build.py")
                   for p in sorted((ROOT / "haskell").glob(pattern))} if any(name.startswith("haskell-") for name in configs) else {},
@@ -143,6 +146,12 @@ def main():
               "zig_source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sorted([*(ROOT / "zig/src").glob("*.zig"), *(ROOT / "zig").glob("build.zig*"), ROOT / "zig/zig.py"])}
                                      if any(name.startswith("zig") for name in configs) else {},
               "runs": runs, "verification": checks, "order": []}
+    if "bun" in configs:
+        record["bun_runtime"] = json.loads(subprocess.check_output([
+            "bun", "-e", 'import { Database } from "bun:sqlite"; const db = new Database(":memory:"); '
+            'console.log(JSON.stringify({bun: Bun.version, sqlite: db.query("SELECT sqlite_version() AS version").get().version, '
+            'sqlite_compile_options: db.query("PRAGMA compile_options").values().flat()})); db.close();'
+        ], text=True, cwd=ROOT / "bun"))
     for index in range(args.rounds):
         shift = index % len(order)
         round_order = order[shift:] + order[:shift]
@@ -166,7 +175,7 @@ def main():
                         runs[name][endpoint].append(result)
                 finally:
                     workload.stop(server)
-                    if name.startswith(("zig", "haskell-")) and socket.exists():
+                    if name.startswith(("zig", "haskell-", "bun")) and socket.exists():
                         raise RuntimeError(f"{name} left its socket behind")
             accepted_exits = (0, 128 + signal.SIGTERM, -signal.SIGTERM) if name == "kotlin-jvm" else (0,)
             if server.returncode not in accepted_exits:

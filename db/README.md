@@ -44,6 +44,12 @@ Its three-function [C shim](../csharp/sqlite-config.c) only adapts the variadic
 The engine source, compiler defines and connection settings are unchanged.
 Its HTTP tests check every reported compile define and connection pragma.
 
+[Bun](../bun/README.md) uses `bun:sqlite` with the same connection pragmas and
+transaction/SQL semantics. It retains Bun's default engine (system SQLite on
+macOS), compile options and allocator settings. It is excluded from the seven
+implementations sharing the custom engine above; its version/options are recorded
+with the measurements.
+
 Haskell links the same engine using direct-sqlite's `+systemlib` mode and a
 single writer. Its [C shim](../haskell/cbits/sqlite_config.c) adapts startup
 configuration and supplies disabled-feature compatibility symbols; all SQL and
