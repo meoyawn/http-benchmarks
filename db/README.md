@@ -44,9 +44,12 @@ Its three-function [C shim](../csharp/sqlite-config.c) only adapts the variadic
 The engine source, compiler defines and connection settings are unchanged.
 Its HTTP tests check every reported compile define and connection pragma.
 
-[Bun](../bun/README.md) uses `bun:sqlite` with the same connection pragmas and
-transaction/SQL semantics. It retains Bun's default engine (system SQLite on
-macOS), compile options and allocator settings. It is excluded from the seven
+[Bun](../bun/README.md) uses `bun:sqlite` in one dedicated writer with the same
+shared connection pragmas and transaction/SQL semantics. It additionally sets
+`journal_size_limit=-1` to reuse the WAL instead of truncating it to macOS's
+32 KiB default after checkpoints. The 1,000-page checkpoint threshold and
+macOS's `checkpoint_fullfsync=1` remain unchanged. Bun retains its default engine
+(system SQLite on macOS), compile options and allocator settings. It is excluded from the seven
 implementations sharing the custom engine above; its version/options are recorded
 with the measurements.
 

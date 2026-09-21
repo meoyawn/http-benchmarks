@@ -94,8 +94,9 @@ settings remain fixed across both endpoints: Rust workers 1/3, Go processors
 sizes are independent measurements and are not rerun by this workload.
 
 The native **Bun.serve / bun:sqlite / Valibot** configuration is named `bun`.
-It uses one event loop and the default SQLite engine (system SQLite on macOS),
-with the shared connection pragmas. Build and test [Bun](../bun/README.md), then
+It uses one HTTP event loop plus one dedicated SQLite worker in the same process,
+and the default SQLite engine (system SQLite on macOS). Shared connection pragmas
+are retained, with `journal_size_limit=-1` for WAL reuse. Build and test [Bun](../bun/README.md), then
 measure it separately:
 
 ```sh
@@ -111,7 +112,7 @@ python3 loadgen/measure.py results/bun-http --rounds 4 --config bun
 The report records Bun's SQLite version and compile options, source/lockfile and
 executable hashes, and the exception to the custom shared SQLite configuration.
 Shutdown must exit cleanly and remove its socket. The published Bun sweep is
-from **2026-09-22**, independent of the other stacks' runs.
+from **2026-09-22**, with Chrome closed, independent of the other stacks' runs.
 
 ## Payloads and correctness
 
@@ -264,9 +265,10 @@ Four-round Haskell medians from **2026-09-22**,
 | haskell-2 | 149% | 102% | 194% | 439% |
 | haskell-4 | 176% | 113% | 374% | 453% |
 
-Four-round Bun medians from **2026-09-22**,
-`results/bun-final-2026-09-22/summary.json`:
+Four-round Bun medians from **2026-09-22**, with Chrome closed,
+`results/bun-worker-closed-chrome-2026-09-22/summary.json`:
 
 | Server configuration | Write server CPU | Write client CPU | Echo server CPU | Echo client CPU |
 | --- | ---: | ---: | ---: | ---: |
-| bun | 83% | 40% | 102% | 271% |
+| bun (HTTP + SQLite worker) | 135% | 52% | 103% | 258% |
+| bun-baseline (single event loop, control) | 84% | 41% | 103% | 270% |

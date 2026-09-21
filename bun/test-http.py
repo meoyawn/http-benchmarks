@@ -98,6 +98,19 @@ def main():
                         ids = list(pool.map(write, range(200)))
                     assert len(set(ids)) == 200
                     committed += len(ids)
+                    with sqlite3.connect(database) as blocker, ThreadPoolExecutor(max_workers=50) as pool:
+                        blocker.execute("BEGIN IMMEDIATE")
+                        pending = [pool.submit(write, index) for index in range(200, 250)]
+                        try:
+                            time.sleep(0.1)
+                            assert all(not future.done() for future in pending), "write bypassed SQLite's transaction lock"
+                            start = time.monotonic()
+                            assert request(sock, "/echo", body)[0] == 200
+                            assert time.monotonic() - start < 1, "SQLite wait blocked the HTTP event loop"
+                        finally:
+                            blocker.rollback()
+                        assert all(future.result() not in ids for future in pending)
+                        committed += len(pending)
                     with sqlite3.connect(database) as db:
                         assert db.execute("SELECT count(*) FROM users WHERE email IS 'parallel@example.com'").fetchone()[0] == 1
                         db.execute("CREATE TRIGGER fail_post BEFORE INSERT ON posts WHEN NEW.content IS 'forced failure' BEGIN SELECT RAISE(ABORT, 'test'); END")
@@ -106,7 +119,7 @@ def main():
                     with sqlite3.connect(database) as db:
                         assert db.execute("SELECT count(*) FROM users WHERE email IS ?", [failed["email"]]).fetchone()[0] == 0
                         db.execute("DROP TRIGGER fail_post")
-                    write(200)
+                    write(250)
                     committed += 1
                     collision = subprocess.run(command, cwd=PROJECT, capture_output=True, timeout=10)
                     assert collision.returncode != 0
@@ -115,7 +128,7 @@ def main():
                         assert db.execute("SELECT count(*) FROM posts").fetchone()[0] == committed
                         assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
                         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-                    print(f"{stop_signal.name}: {committed} commits, 50 clients, validation, malformed JSON, chunked bodies, rollback recovery and occupied socket passed", flush=True)
+                    print(f"{stop_signal.name}: {committed} commits, 50 clients, responsive echo during blocked writes, validation, malformed JSON, chunked bodies, rollback recovery and occupied socket passed", flush=True)
                 finally:
                     server.send_signal(stop_signal)
                     try:

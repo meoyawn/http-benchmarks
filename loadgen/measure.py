@@ -137,7 +137,7 @@ def main():
               "load_generator": subprocess.check_output([str(workload.BINARY), "-version"], text=True).strip(),
               "artifacts_sha256": hashes, "configurations": {k: {"binary": artifact_key(b), "args": flags, "env": env} for k, (b, flags, env) in configs.items()},
               "sqlite_configuration": json.loads((ROOT / "db/sqlite-config.json").read_text()),
-              "sqlite_configuration_exceptions": {"bun": "bun:sqlite default engine (system SQLite on macOS); matching connection pragmas, no custom engine or global allocator configuration"} if "bun" in configs else {},
+              "sqlite_configuration_exceptions": {"bun": "bun:sqlite default engine (system SQLite on macOS); matching shared pragmas plus journal_size_limit=-1 for WAL reuse; default checkpoint_fullfsync retained; no custom engine or global allocator configuration"} if "bun" in configs else {},
               "bun_source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sorted([*(ROOT / "bun/src").glob("*.ts"), ROOT / "bun/package.json", ROOT / "bun/bun.lock"])} if "bun" in configs else {},
               "haskell_source_sha256": {str(p.relative_to(ROOT)): digest(p) for pattern in
                   ("src/*.hs", "app/*.hs", "cbits/*.c", "*.cabal", "cabal.project", "cabal.project.freeze", "toolchain.sh", "build.py")

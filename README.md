@@ -16,7 +16,8 @@ sweep with one and four HTTP executors. Configurations rotate through order
 positions within each sweep, with fresh processes and databases.
 Haskell's **two additional † rows** use the same workload in a separate
 four-round sweep on **2026-09-22**; they were not measured alongside the older stacks.
-Bun's **additional † row** uses its own four-round sweep on **2026-09-22**.
+Bun's **additional † row** uses its own four-round sweep on **2026-09-22**,
+remeasured with Chrome closed after adding a dedicated SQLite worker.
 Each runs `/posts` for 10 seconds, then `/echo` for 10 seconds, at **50 concurrent requests**, without HTTP warm-up.
 
 The seeded corpus has **65,536 valid email/content pairs** and **32–256 Unicode
@@ -111,13 +112,16 @@ library's callback-free stepping API; long foreign calls can delay GHC collectio
 [Selection, profiling, tradeoffs and reproduction](haskell/README.md).
 
 Bun uses **1.4.2**, native **`Bun.serve` routes**, **`bun:sqlite`**, and
-**Valibot 1.5.0**, with one JavaScript event loop and one synchronous SQLite
-connection. Valibot uses the same whole-string ASCII email rule and shared
+**Valibot 1.5.0**, with one HTTP event loop and one dedicated Bun Worker owning
+the synchronous SQLite connection. Valibot uses the same whole-string ASCII email rule and shared
 fixtures. Prepared statements and the immediate-transaction wrapper are reused;
 each response follows its own commit. Connection pragmas match the shared
 settings above, but Bun uses **macOS system SQLite 3.51.0**, with its default compile
 options and allocator, rather than the other seven implementations' custom
-engine. The release executable includes the Bun runtime and Valibot.
+engine. WAL reuse (`journal_size_limit=-1`) avoids Apple's default 32 KiB
+truncation; the 1,000-page checkpoint threshold and stronger checkpoint sync
+policy are preserved. CPU/RSS cover both threads in the same process.
+The release executable includes the Bun runtime and Valibot.
 [Implementation, measurement definitions and reproduction](bun/README.md).
 
 ```sh
@@ -144,7 +148,7 @@ Build and reproduction: [randomized load runner](loadgen/README.md). `task bench
 | [Zig std.http/zio (`-workers 4`)](zig/) † | 26.8K | 1.493ms | 14.9 MiB | 187% | 5.84ms | 34.25s | 3.05s | 0.80 MiB |
 | [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) † | 23.0K | 1.685ms | 95.4 MiB | 226% | 10.00ms | 1.12s | 0.521s | 4.60 MiB |
 | Python Blacksheep | 19K | 2.5ms | — | — | — | — | — | — |
-| [Bun native HTTP + SQLite](bun/) † | 13.3K | 2.716ms | 50.8 MiB | 83% | 17.37ms | 0.152s | 0s | 59.34 MiB |
+| [Bun native HTTP + SQLite](bun/) † | 16.3K | 2.241ms | 74.1 MiB | 135% | 17.30ms | 0.118s | 0s | 59.34 MiB |
 | Elixir Bandit | 10K | 4.9ms | — | — | — | — | — | — |
 | [Kotlin Vert.x SQLite Panama (GraalVM)](kotlin/#optimized-graalvm-executable) | 8.9K | 5.109ms | 104.6 MiB | 116% | 29.62ms | 149.49s | 1.09s (JVM) | 88.12 MiB |
 
@@ -204,12 +208,16 @@ p99 is **24.247 / 22.495ms**. The [Haskell notes](haskell/README.md) retain
 ordinary and mixed FFI comparisons, the timer diagnosis and complete aggregates.
 These are separate September 22 measurements.
 
-Bun measures **13.3K writes/sec / 128.4K echo RPS**, with ranges of
-**13.2K–13.5K / 126.6K–128.8K** across four rounds. Startup is **17.37ms**;
-clean executable builds take **0.152s**. Development runs TypeScript directly,
-so the dev/debug rebuild is **0s**. Peak write/echo RSS is **50.8 / 53.7 MiB**. These measurements use
-randomized JSON and the default macOS SQLite engine; the historical static-payload
-JS result is superseded. [Samples and verification](bun/measurements.json).
+Bun measures **16.3K writes/sec / 127.3K echo RPS**, with ranges of
+**16.2K–16.5K / 125.0K–129.2K** across four rounds with Chrome closed.
+Startup is **17.30ms**; clean executable builds take **0.118s**. Development
+runs TypeScript directly, so the dev/debug rebuild is **0s**. Peak write/echo RSS
+is **74.1 / 75.1 MiB**. A control measured in the same alternating sweep reached
+**13.5K writes/sec at 84% CPU**, versus **16.3K at 135%** with the dedicated
+writer and reused WAL: **21% more writes**, with higher CPU/RAM use. Control
+echo was **130.3K RPS**. These randomized measurements use macOS SQLite and
+supersede the prior single-event-loop Bun row. [Samples and verification](bun/measurements.json),
+[profiling and comparison](bun/write-profile.md).
 
 Both Kotlin rows were fully remeasured after removing Jackson, staging native
 libraries at build time and adding a HotSpot class/linkage/profile cache for the
@@ -288,7 +296,7 @@ are in `results/actix-go-final-2026-09-18/debug-builds/`. Zig samples are in
 `results/zig-016-builds/`; Haskell samples are in
 `results/haskell-multicore-build-2026-09-22/`.
 Bun's [build runner](bun/measure-build.py) records clean release samples in
-`results/bun-build-final-2026-09-22/`.
+`results/bun-worker-build-closed-chrome-2026-09-22/`.
 After the per-language toolchain/dependency setup, reproduce from the repository
 root with a fresh output directory:
 
@@ -437,7 +445,7 @@ task echo
 | Python Blacksheep | 192K | 0.2ms | — | — | — | — | — |
 | [OCaml Cohttp/Eio (`-domains 4`)](ocaml/) † | 139.2K | 0.330ms | 98.2 MiB | 316% | 10.00ms | 1.12s | 0.521s |
 | Elixir Bandit | 139K | 0.3ms | — | — | — | — | — |
-| [Bun native HTTP + SQLite](bun/) † | 128.4K | 0.353ms | 53.7 MiB | 102% | 17.37ms | 0.152s | 0s |
+| [Bun native HTTP + SQLite](bun/) † | 127.3K | 0.359ms | 75.1 MiB | 103% | 17.30ms | 0.118s | 0s |
 | [OCaml Cohttp/Eio (`-domains 1`)](ocaml/) † | 67.6K | 0.692ms | 39.2 MiB | 94% | 8.92ms | 1.12s | 0.521s |
 
 All randomized requests returned the expected status. Every database passed
@@ -462,9 +470,10 @@ A compact [measurement record](haskell/measurements.json) retains the published
 aggregates, individual samples, correctness results and source/artifact hashes.
 Bun's corresponding [measurement record](bun/measurements.json) includes all four
 HTTP rounds, five startup samples, three clean release builds, SQLite version and
-compile options, and source/artifact hashes. Full raw Bun results are in
-`results/bun-final-2026-09-22/`, `results/bun-startup-2026-09-22/` and
-`results/bun-build-final-2026-09-22/` (gitignored).
+compile options, control comparisons and source/artifact hashes. Full raw Bun
+results are in `results/bun-worker-closed-chrome-2026-09-22/`,
+`results/bun-worker-startup-closed-chrome-2026-09-22/` and
+`results/bun-worker-build-closed-chrome-2026-09-22/` (gitignored).
 Full raw JSON, histograms, RSS samples, logs and databases remain locally under
 `results/random-json-2026-09-18/` (gitignored). Historical reports remain under
 `results/actix-go-final-2026-09-18/` and `results/ocaml-2026-09-17/`.

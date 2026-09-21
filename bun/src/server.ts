@@ -1,9 +1,8 @@
-import { Database } from "bun:sqlite"
 import { existsSync } from "node:fs"
 import { rm } from "node:fs/promises"
 import { parseArgs } from "node:util"
 import { parseNewPost } from "./new-post.ts"
-import type { NewPost } from "./new-post.ts"
+import { openWriter } from "./sqlite-writer.ts"
 
 const { values } = parseArgs({
   args: Bun.argv.slice(2).map(arg => arg === "-db" ? "--db" : arg === "-socket" ? "--socket" : arg),
@@ -16,43 +15,7 @@ const { values } = parseArgs({
 const unix = values.socket
 if (existsSync(unix)) throw new Error(`Socket already exists: ${unix}`)
 
-const db = new Database(values.db, { readwrite: true, strict: true })
-db.exec(`
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-PRAGMA foreign_keys = ON;
-PRAGMA busy_timeout = 10000;
-PRAGMA cache_size = -2000;
-PRAGMA wal_autocheckpoint = 1000;
-PRAGMA temp_store = MEMORY;
-PRAGMA mmap_size = 0;
-PRAGMA optimize = 0x10002;
-`)
-
-const insertUser = db.query<void, [email: string]>(`
-INSERT OR IGNORE INTO users (email) VALUES (?)
-`)
-
-interface Post {
-  id: number
-  user_id: number
-  content: string
-  created_at: number
-  updated_at: number
-}
-
-const insertPost = db.query<Post, [content: string, email: string]>(`
-INSERT INTO posts (content, user_id)
-SELECT ?, id FROM users WHERE email IS ?
-RETURNING id, user_id, content, created_at, updated_at
-`)
-
-const createPost = db.transaction(function createPost({ content, email }: NewPost) {
-  insertUser.run(email)
-  const post = insertPost.get(content, email)
-  if (!post) throw new Error("Post insert returned no row")
-  return post
-})
+const writer = await openWriter(values.db)
 
 const server = Bun.serve({
   unix,
@@ -69,7 +32,7 @@ const server = Bun.serve({
         }
         const result = parseNewPost(body)
         if (!result.success) return Response.json(result.issues, { status: 400 })
-        return Response.json(createPost.immediate(result.output), { status: 201 })
+        return Response.json(await writer.create(result.output), { status: 201 })
       },
     },
     "/echo": {
@@ -105,10 +68,7 @@ async function shutdown() {
   if (stopping) return
   stopping = true
   await server.stop()
-  insertUser.finalize()
-  insertPost.finalize()
-  db.exec("PRAGMA optimize")
-  db.close(true)
+  await writer.close()
   await rm(unix, { force: true })
 }
 
